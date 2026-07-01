@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { checkPassword } from "../auth.js";
+import { checkPassword, saveStoredPassword, requireAuth } from "../auth.js";
 
 const router = Router();
 
@@ -13,6 +13,18 @@ router.post("/login", (req: Request, res: Response) => {
     }
   }
   return res.status(401).json({ error: "Incorrect password" });
+});
+
+router.post("/change-password", requireAuth, (req: Request, res: Response) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!newPassword || newPassword.trim().length < 4) {
+    return res.status(400).json({ error: "New password must be at least 4 characters long" });
+  }
+  if (!checkPassword(currentPassword)) {
+    return res.status(400).json({ error: "Current password is incorrect" });
+  }
+  saveStoredPassword(newPassword.trim());
+  res.json({ ok: true });
 });
 
 router.post("/logout", (req: Request, res: Response) => {

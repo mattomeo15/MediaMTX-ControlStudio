@@ -12,6 +12,7 @@ import authRouter from "./server/routes/auth.js";
 import streamsRouter from "./server/routes/streams.js";
 import announcementsRouter from "./server/routes/announcements.js";
 import configRouter from "./server/routes/config.js";
+import { initWebSocketServer } from "./server/websocket.js";
 
 async function startServer() {
   const app = express();
@@ -74,9 +75,12 @@ async function startServer() {
   });
 
   const numericPort = Number(PORT);
-  app.listen(numericPort, "0.0.0.0", () => {
+  const server = app.listen(numericPort, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${numericPort}`);
   });
+
+  // Attach real-time WebSocket server
+  initWebSocketServer(server);
 }
 
 startServer().catch((error) => {

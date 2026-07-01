@@ -1,6 +1,33 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import { Request, Response, NextFunction } from "express";
-import { ADMIN_PASSWORD } from "./env.js";
+import { ADMIN_PASSWORD, DATA_DIR } from "./env.js";
+
+const CREDENTIALS_PATH = path.join(DATA_DIR, "credentials.json");
+
+export function getStoredPassword(): string {
+  try {
+    if (fs.existsSync(CREDENTIALS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, "utf8"));
+      if (data && data.password) {
+        return data.password;
+      }
+    }
+  } catch (err) {
+    console.error("Error reading credentials:", err);
+  }
+  return ADMIN_PASSWORD;
+}
+
+export function saveStoredPassword(password: string) {
+  try {
+    fs.mkdirSync(path.dirname(CREDENTIALS_PATH), { recursive: true });
+    fs.writeFileSync(CREDENTIALS_PATH, JSON.stringify({ password }, null, 2));
+  } catch (err) {
+    console.error("Error writing credentials:", err);
+  }
+}
 
 // Add typed session helper
 export interface AuthenticatedRequest extends Request {
@@ -18,7 +45,7 @@ export function timingSafeEqual(a: string, b: string): boolean {
 }
 
 export function checkPassword(candidate: string): boolean {
-  return timingSafeEqual(candidate || "", ADMIN_PASSWORD);
+  return timingSafeEqual(candidate || "", getStoredPassword());
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {

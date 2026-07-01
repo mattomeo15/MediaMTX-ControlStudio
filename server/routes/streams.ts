@@ -1,10 +1,53 @@
 import { Router, Request, Response } from "express";
 import { requireAuth } from "../auth.js";
 import * as mtx from "../mediamtx.js";
+import { alerts, getRouterSettings, saveRouterSettings, broadcast } from "../websocket.js";
 
 const router = Router();
 
 router.use(requireAuth);
+
+// --- Alerts ---
+router.get("/alerts", (req: Request, res: Response) => {
+  res.json(alerts);
+});
+
+router.post("/alerts/read/:id", (req: Request, res: Response) => {
+  const item = alerts.find((a) => a.id === req.params.id);
+  if (item) {
+    item.read = true;
+    broadcast("alerts-update", alerts);
+  }
+  res.json({ ok: true, alerts });
+});
+
+router.post("/alerts/clear", (req: Request, res: Response) => {
+  alerts.splice(0, alerts.length); // clear the array
+  broadcast("alerts-update", alerts);
+  res.json({ ok: true, alerts });
+});
+
+// --- Autopilot / Router Settings ---
+router.get("/router-settings", (req: Request, res: Response) => {
+  res.json(getRouterSettings());
+});
+
+router.post("/router-settings", (req: Request, res: Response) => {
+  try {
+    const { enabled, primaryPath, fallbackPath, destinationPath } = req.body || {};
+    const settings = {
+      enabled: !!enabled,
+      primaryPath: String(primaryPath || "live").trim(),
+      fallbackPath: String(fallbackPath || "announcements").trim(),
+      destinationPath: String(destinationPath || "main").trim(),
+    };
+    saveRouterSettings(settings);
+    broadcast("init-router", settings);
+    res.json({ ok: true, settings });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
 
 // --- Active runtime paths ---
 router.get("/active", async (req: Request, res: Response) => {

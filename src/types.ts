@@ -50,3 +50,19 @@ export interface GlobalConfig {
   srtEnable?: boolean;
   apiAddress?: string;
 }
+
+export interface StreamAlert {
+  id: string;
+  streamName: string;
+  type: "disconnect" | "connect" | "routing" | "system";
+  message: string;
+  timestamp: string;
+  read: boolean;
+}
+
+export interface RouterSettings {
+  enabled: boolean;
+  primaryPath: string;
+  fallbackPath: string;
+  destinationPath: string;
+}
