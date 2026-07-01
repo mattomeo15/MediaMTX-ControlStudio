@@ -1,0 +1,52 @@
+version: "3.8"
+
+services:
+  # Official MediaMTX server
+  mediamtx:
+    image: bluenet/mediamtx:latest-ffmpeg
+    container_name: mediamtx
+    restart: unless-stopped
+    ports:
+      - "8554:8554" # RTSP
+      - "1935:1935" # RTMP
+      - "8888:8888" # HLS
+      - "8889:8889" # WebRTC
+      - "8890:8890" # SRT
+      - "9997:9997" # Control API (mapped locally)
+    environment:
+      # Enable API and bind to 0.0.0.0 so our UI sidecar can communicate with it
+      - MTX_API=yes
+      - MTX_APIADDRESS=0.0.0.0:9997
+    networks:
+      - media-net
+
+  # MediaMTX Studio Control Panel
+  mediamtx-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediamtx-ui
+    restart: unless-stopped
+    ports:
+      - "3000:3000" # UI Portal
+    environment:
+      - PORT=3000
+      - ADMIN_PASSWORD=changeme
+      - SESSION_SECRET=broadcasting-studio-session-secret-change-me
+      - MEDIAMTX_API_URL=http://mediamtx:9997
+      - MEDIAMTX_RTSP_URL=rtsp://mediamtx:8554
+      - DATA_DIR=/app/data
+    volumes:
+      # Persistent volume for slide images and custom config
+      - mediamtx-ui-data:/app/data
+    depends_on:
+      - mediamtx
+    networks:
+      - media-net
+
+volumes:
+  mediamtx-ui-data:
+
+networks:
+  media-net:
+    driver: bridge

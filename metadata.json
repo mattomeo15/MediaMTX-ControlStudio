@@ -1,0 +1,6 @@
+{
+  "name": "MediaMTX Control Panel",
+  "description": "A web interface to view and manage live streams, manage an announcement image reel, and edit server configuration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
