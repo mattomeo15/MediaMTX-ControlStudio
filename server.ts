@@ -11,8 +11,10 @@ import { PORT, SESSION_SECRET } from "./server/env.js";
 import authRouter from "./server/routes/auth.js";
 import streamsRouter from "./server/routes/streams.js";
 import announcementsRouter from "./server/routes/announcements.js";
+import mediaRouter from "./server/routes/media.js";
 import configRouter from "./server/routes/config.js";
 import { initWebSocketServer } from "./server/websocket.js";
+import { initMetrics } from "./server/metrics.js";
 
 async function startServer() {
   const app = express();
@@ -35,10 +37,15 @@ async function startServer() {
     })
   );
 
+  // Initialize stream health metrics recorder
+  initMetrics();
+
   // Mount API routes
   app.use("/api/auth", authRouter);
   app.use("/api/streams", streamsRouter);
   app.use("/api/announcements", announcementsRouter);
+  app.use("/api/photo-loop", announcementsRouter);
+  app.use("/api/media-streams", mediaRouter);
   app.use("/api/config", configRouter);
 
   // Basic API Health check

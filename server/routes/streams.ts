@@ -2,10 +2,23 @@ import { Router, Request, Response } from "express";
 import { requireAuth } from "../auth.js";
 import * as mtx from "../mediamtx.js";
 import { alerts, getRouterSettings, saveRouterSettings, broadcast } from "../websocket.js";
+import { getMetrics } from "../metrics.js";
 
 const router = Router();
 
 router.use(requireAuth);
+
+// --- Metrics ---
+router.get("/metrics", (req: Request, res: Response) => {
+  try {
+    const streamName = String(req.query.streamName || "live");
+    const range = (req.query.range || "24h") as "24h" | "7d" | "30d";
+    const data = getMetrics(streamName, range);
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
 
 // --- Alerts ---
 router.get("/alerts", (req: Request, res: Response) => {

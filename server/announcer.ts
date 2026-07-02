@@ -28,6 +28,8 @@ export interface AnnouncementSettings {
   height: number;
   fps: number;
   images: AnnouncementImage[];
+  useCustomDirectory?: boolean;
+  directoryPath?: string;
 }
 
 export const DEFAULT_SETTINGS: AnnouncementSettings = {
@@ -37,6 +39,8 @@ export const DEFAULT_SETTINGS: AnnouncementSettings = {
   height: 1080,
   fps: 25,
   images: [],              // [{ filename, duration }] in display order
+  useCustomDirectory: false,
+  directoryPath: "",
 };
 
 export interface AnnouncerState {
@@ -74,7 +78,16 @@ export async function saveSettings(settings: AnnouncementSettings) {
 
 export async function listImages(): Promise<AnnouncementImage[]> {
   const settings = await loadSettings();
-  const onDisk = new Set(await fsp.readdir(IMAGES_DIR).catch(() => []));
+  const activeDir = settings.useCustomDirectory && settings.directoryPath ? settings.directoryPath : IMAGES_DIR;
+  
+  if (!fs.existsSync(activeDir)) {
+    return [];
+  }
+  
+  const files = await fsp.readdir(activeDir).catch(() => []);
+  const imageFiles = files.filter(f => /\.(jpe?g|png|gif|webp|bmp|tiff?)$/i.test(f));
+  const onDisk = new Set(imageFiles);
+
   // Keep settings.images authoritative for order/duration, but drop any
   // entries whose file no longer exists, and append any orphaned files.
   const known = settings.images.filter((i) => onDisk.has(i.filename));
@@ -122,9 +135,10 @@ function runFfmpeg(args: string[], options: { label: string }): Promise<void> {
  * Build the looping reel as a single mp4 file from the configured images.
  */
 async function renderReel(settings: AnnouncementSettings) {
-  const images = settings.images;
+  const activeDir = settings.useCustomDirectory && settings.directoryPath ? settings.directoryPath : IMAGES_DIR;
+  const images = await listImages();
   if (images.length === 0) {
-    throw new Error("No images to render");
+    throw new Error("No image files found in the active directory");
   }
 
   const { width: W, height: H, fps, transitionType, transitionDuration: t } = settings;
@@ -134,11 +148,11 @@ async function renderReel(settings: AnnouncementSettings) {
     // --- Concat demuxer path: simplest, exact per-image durations ---
     const listFile = path.join(path.dirname(REEL_PATH), "concat-list.txt");
     const lines = images.map((img) => {
-      const p = path.join(IMAGES_DIR, img.filename).replace(/'/g, "'\\''");
+      const p = path.join(activeDir, img.filename).replace(/'/g, "'\\''");
       return `file '${p}'\nduration ${img.duration}`;
     });
     // The concat demuxer requires the last file listed again without a duration.
-    const lastPath = path.join(IMAGES_DIR, images[images.length - 1].filename).replace(/'/g, "'\\''");
+    const lastPath = path.join(activeDir, images[images.length - 1].filename).replace(/'/g, "'\\''");
     lines.push(`file '${lastPath}'`);
     await fsp.writeFile(listFile, lines.join("\n"));
 
@@ -161,7 +175,7 @@ async function renderReel(settings: AnnouncementSettings) {
   images.forEach((img, i) => {
     const isLast = i === images.length - 1;
     const dur = img.duration + (isLast ? 0 : t);
-    inputArgs.push("-loop", "1", "-t", dur.toFixed(2), "-i", path.join(IMAGES_DIR, img.filename));
+    inputArgs.push("-loop", "1", "-t", dur.toFixed(2), "-i", path.join(activeDir, img.filename));
   });
 
   const scaleParts = images.map((_, i) => `[${i}:v]${scaleFilter}[s${i}]`);
@@ -252,3 +266,41 @@ export function stopAll() {
   stopStreaming();
   setStatus("idle", "Stopped");
 }
+
+let lastDirectorySignature = "";
+let changeWatchTimer: NodeJS.Timeout | null = null;
+
+export function startDirectoryWatching() {
+  if (changeWatchTimer) clearInterval(changeWatchTimer);
+
+  changeWatchTimer = setInterval(async () => {
+    try {
+      const settings = await loadSettings();
+      const activeDir = settings.useCustomDirectory && settings.directoryPath ? settings.directoryPath : IMAGES_DIR;
+      if (!fs.existsSync(activeDir)) return;
+
+      const files = await fsp.readdir(activeDir).catch(() => []);
+      const imageFiles = files.filter(f => /\.(jpe?g|png|gif|webp|bmp|tiff?)$/i.test(f));
+      
+      let signatureStr = "";
+      for (const file of imageFiles) {
+        const filePath = path.join(activeDir, file);
+        const stat = await fsp.stat(filePath).catch(() => null);
+        if (stat) {
+          signatureStr += `${file}:${stat.size}:${stat.mtimeMs};`;
+        }
+      }
+
+      if (lastDirectorySignature && lastDirectorySignature !== signatureStr) {
+        console.log(`Photo Loop: Directory '${activeDir}' changes detected. Rebuilding stream automatically...`);
+        rebuildAndStream().catch((e) => console.error("Auto rebuild error:", e));
+      }
+      lastDirectorySignature = signatureStr;
+    } catch (err) {
+      console.error("Error in photo loop folder watching:", err);
+    }
+  }, 10000); // Check every 10 seconds
+}
+
+// Start watching on load
+startDirectoryWatching();

@@ -1,21 +1,56 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+:root {
+  --body-bg: #f8fafc;
+  --body-text: #0f172a;
+  --body-gradient: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.04) 0px, transparent 40%),
+                   radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.04) 0px, transparent 40%);
+  --bg-sidebar: #ffffff;
+  --bg-card: #ffffff;
+  --border-card: rgba(15, 23, 42, 0.08);
+  --text-muted: #475569;
+  --text-dim: #64748b;
+  --bg-input: #ffffff;
+  --border-input: #cbd5e1;
+  --text-bright: #0f172a;
+  --glass-panel-bg: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(15, 23, 42, 0.08);
+}
+
+:root.dark {
+  --body-bg: #08090d;
+  --body-text: #f1f5f9;
+  --body-gradient: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
+                   radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
+                   radial-gradient(at 50% 100%, rgba(232, 97, 58, 0.04) 0px, transparent 50%);
+  --bg-sidebar: rgba(15, 23, 42, 0.3);
+  --bg-card: rgba(255, 255, 255, 0.03);
+  --border-card: rgba(255, 255, 255, 0.08);
+  --text-muted: #cbd5e1;
+  --text-dim: #94a3b8;
+  --bg-input: rgba(0, 0, 0, 0.25);
+  --border-input: rgba(255, 255, 255, 0.08);
+  --text-bright: #ffffff;
+  --glass-panel-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 }
 
 body {
-  background-color: #08090d;
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.08) 0px, transparent 50%),
-    radial-gradient(at 50% 100%, rgba(232, 97, 58, 0.04) 0px, transparent 50%);
+  background-color: var(--body-bg);
+  background-image: var(--body-gradient);
   background-attachment: fixed;
-  color: #f1f5f9;
+  color: var(--body-text);
   font-family: var(--font-sans);
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Custom scrollbars matching the glass aesthetic */
@@ -29,20 +64,21 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(120, 120, 120, 0.2);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(120, 120, 120, 0.4);
 }
 
 /* Glass Utility Classes */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--glass-panel-bg);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--glass-border);
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 .glass-panel-hover {
@@ -50,20 +86,207 @@ body {
 }
 
 .glass-panel-hover:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.15);
 }
 
 .glass-input {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-input);
+  border: 1px solid var(--border-input);
+  color: var(--body-text);
   transition: all 0.2s ease-in-out;
 }
 
 .glass-input:focus {
-  background: rgba(0, 0, 0, 0.35);
-  border-color: rgba(59, 130, 246, 0.4);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+  outline: none;
+}
+
+/* Custom theme helpers */
+.theme-card {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-card);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.theme-sidebar {
+  background-color: var(--bg-sidebar);
+  border-color: var(--border-card);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.text-theme-muted {
+  color: var(--text-muted);
+}
+
+.text-theme-dim {
+  color: var(--text-dim);
+}
+
+.text-theme-bright {
+  color: var(--text-bright);
+}
+
+/* Recharts Custom Styling Tooltips */
+.recharts-default-tooltip {
+  background-color: var(--bg-sidebar) !important;
+  border: 1px solid var(--border-card) !important;
+  border-radius: 12px !important;
+  color: var(--body-text) !important;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+/* =========================================
+   LIGHT THEME READABILITY AND POLISH
+   ========================================= */
+:root:not(.dark) {
+  /* High contrast colors for light mode */
+  --text-primary: #0f172a; /* slate-900 */
+  --text-secondary: #334155; /* slate-700 */
+  --text-tertiary: #475569; /* slate-600 */
+  --border-light: rgba(15, 23, 42, 0.08);
+  --bg-light-card: #ffffff;
+  --bg-light-input: #f8fafc;
+  
+  /* Headings and body texts are controlled by Tailwind classes */
+  
+  /* Restore original colors on colored indicators/badges */
+  .text-emerald-500, .text-emerald-400 {
+    color: #059669 !important;
+  }
+  .text-rose-500, .text-rose-400 {
+    color: #dc2626 !important;
+  }
+  .text-amber-500, .text-amber-400 {
+    color: #d97706 !important;
+  }
+  .text-blue-500, .text-blue-400 {
+    color: #2563eb !important;
+  }
+  
+  /* Fix layout structures that use transparency for dark mode */
+  main, .flex-1 {
+    background-color: #f8fafc;
+  }
+
+  /* Glass/Card containers */
+  .bg-white\/5, 
+  .bg-white\/2, 
+  .bg-slate-950\/20,
+  [class*="bg-white/"]:not(.bg-blue-600 *):not(.bg-emerald-600 *):not(.bg-red-600 *):not(.bg-rose-600 *):not(.bg-amber-500 *):not(.bg-blue-600):not(.bg-emerald-600):not(.bg-red-600):not(.bg-rose-600):not(.bg-amber-500) {
+    background-color: var(--bg-light-card) !important;
+    border-color: var(--border-light) !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03), 0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
+  }
+
+  /* Card headers and subtexts */
+  .text-slate-400, .text-slate-300, .text-slate-200 {
+    color: var(--text-tertiary) !important;
+  }
+  .text-slate-500 {
+    color: #64748b !important;
+  }
+
+  /* Keep solid colored button labels white */
+  button.bg-blue-600,
+  button.bg-emerald-600,
+  button.bg-red-600,
+  button.bg-rose-600,
+  button.bg-amber-500,
+  .bg-blue-600 *,
+  .bg-emerald-600 *,
+  .bg-red-600 *,
+  .bg-rose-600 *,
+  .bg-amber-500 * {
+    color: #ffffff !important;
+  }
+
+  /* Form and settings controls */
+  input[type="text"], 
+  input[type="url"], 
+  input[type="password"], 
+  input[type="number"], 
+  select, 
+  textarea,
+  .bg-slate-950\/40 {
+    background-color: var(--bg-light-input) !important;
+    border-color: rgba(15, 23, 42, 0.12) !important;
+    color: var(--text-primary) !important;
+  }
+
+  input::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  /* List items hover states */
+  .hover\:bg-white\/5:hover,
+  .hover\:bg-white\/10:hover,
+  .hover\:bg-white\/\[0\.08\]:hover {
+    background-color: rgba(15, 23, 42, 0.03) !important;
+  }
+
+  /* Subtle border overrides */
+  .border-white\/5,
+  .border-white\/10,
+  .border-white\/20,
+  .border-white\/25 {
+    border-color: var(--border-light) !important;
+  }
+
+  /* Sidebars and Header aesthetics */
+  aside, header {
+    background-color: #ffffff !important;
+    border-color: rgba(15, 23, 42, 0.08) !important;
+  }
+  
+  aside .text-slate-400 {
+    color: var(--text-tertiary) !important;
+  }
+  aside .text-slate-500 {
+    color: #64748b !important;
+  }
+
+  /* Fix list item active tabs in sidebar in light mode */
+  aside .bg-white\/10,
+  aside .bg-slate-200\/50 {
+    background-color: rgba(59, 130, 246, 0.08) !important; /* light blue */
+    color: #2563eb !important;
+    border-color: rgba(59, 130, 246, 0.15) !important;
+  }
+
+  aside .bg-white\/10 * {
+    color: #2563eb !important;
+  }
+
+  /* Active/Inactive state details */
+  .border-transparent {
+    border-color: transparent !important;
+  }
+
+  /* Charts and visualization readabilities */
+  .recharts-cartesian-grid-horizontal line,
+  .recharts-cartesian-grid-vertical line {
+    stroke: rgba(15, 23, 42, 0.08) !important;
+  }
+  
+  .recharts-text {
+    fill: var(--text-tertiary) !important;
+  }
+
+  /* Alerts container formatting */
+  .bg-amber-500\/10 {
+    background-color: #fef3c7 !important;
+    border-color: #fde68a !important;
+    color: #92400e !important;
+  }
+
+  .bg-rose-500\/10 {
+    background-color: #ffe4e6 !important;
+    border-color: #fecdd3 !important;
+    color: #9f1239 !important;
+  }
 }
 

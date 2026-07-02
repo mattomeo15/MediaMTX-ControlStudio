@@ -59,6 +59,8 @@ router.put("/settings", async (req: Request, res: Response) => {
       width,
       height,
       fps,
+      useCustomDirectory,
+      directoryPath,
     } = req.body;
 
     if (transitionType !== undefined) {
@@ -88,6 +90,12 @@ router.put("/settings", async (req: Request, res: Response) => {
       const f = Number(fps);
       if (isNaN(f) || f < 1 || f > 60) return res.status(400).json({ error: "fps must be 1-60" });
       current.fps = f;
+    }
+    if (useCustomDirectory !== undefined) {
+      current.useCustomDirectory = !!useCustomDirectory;
+    }
+    if (directoryPath !== undefined) {
+      current.directoryPath = String(directoryPath).trim();
     }
 
     await announcer.saveSettings(current);

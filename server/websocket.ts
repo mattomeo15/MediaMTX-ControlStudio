@@ -175,7 +175,7 @@ async function runMonitoringCycle() {
       }, {}),
     });
 
-    // 4. Autopilot switching logic
+    // 4. Failover Director switching logic
     const rSettings = getRouterSettings();
     if (rSettings.enabled) {
       const primaryActive = currentReadyMap.get(rSettings.primaryPath) === true;
@@ -192,9 +192,9 @@ async function runMonitoringCycle() {
         if (destinationConfig) {
           // If the configured source does not match the expected source, update it!
           if (destinationConfig.source !== expectedSource) {
-            console.log(`Autopilot: switching '${rSettings.destinationPath}' source from '${destinationConfig.source}' to '${expectedSource}'`);
+            console.log(`Failover Director: switching '${rSettings.destinationPath}' source from '${destinationConfig.source}' to '${expectedSource}'`);
             await patchPathConfig(rSettings.destinationPath, { source: expectedSource }).catch((e) => {
-              console.error(`Autopilot patch error:`, e);
+              console.error(`Failover Director patch error:`, e);
             });
 
             const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -202,7 +202,7 @@ async function runMonitoringCycle() {
               id: alertId,
               streamName: rSettings.destinationPath,
               type: "routing",
-              message: `Autopilot: Routed output '/${rSettings.destinationPath}' to target '/${expectedPath}'`,
+              message: `Failover Director: Routed output '/${rSettings.destinationPath}' to target '/${expectedPath}'`,
               timestamp: new Date().toISOString(),
               read: false,
             };
@@ -212,9 +212,9 @@ async function runMonitoringCycle() {
           }
         } else {
           // Create the destination path with the expected source
-          console.log(`Autopilot: creating destination path '${rSettings.destinationPath}' with source '${expectedSource}'`);
+          console.log(`Failover Director: creating destination path '${rSettings.destinationPath}' with source '${expectedSource}'`);
           await addPathConfig(rSettings.destinationPath, { source: expectedSource }).catch((e) => {
-            console.error(`Autopilot create error:`, e);
+            console.error(`Failover Director create error:`, e);
           });
 
           const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -222,7 +222,7 @@ async function runMonitoringCycle() {
             id: alertId,
             streamName: rSettings.destinationPath,
             type: "routing",
-            message: `Autopilot: Initialized output '/${rSettings.destinationPath}' target to '/${expectedPath}'`,
+            message: `Failover Director: Initialized output '/${rSettings.destinationPath}' target to '/${expectedPath}'`,
             timestamp: new Date().toISOString(),
             read: false,
           };

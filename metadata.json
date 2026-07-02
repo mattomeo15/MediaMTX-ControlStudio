@@ -1,5 +1,5 @@
 {
-  "name": "MediaMTX Control Panel",
+  "name": "Media MTX Control Studio",
   "description": "A web interface to view and manage live streams, manage an announcement image reel, and edit server configuration.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
