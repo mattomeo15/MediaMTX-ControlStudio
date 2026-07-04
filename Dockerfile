@@ -10,7 +10,8 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy configuration and source files
-COPY tsconfig.json vite.config.ts server.ts ./
+COPY tsconfig.json vite.config.ts server.ts index.html ./
+COPY assets/ ./assets/
 COPY src/ ./src/
 COPY server/ ./server/
 

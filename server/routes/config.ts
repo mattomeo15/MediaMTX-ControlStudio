@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { requireAuth } from "../auth.js";
 import * as mtx from "../mediamtx.js";
-import { UI_SETTINGS_PATH, MEDIAMTX_PUBLIC_HLS_URL_DEFAULT } from "../env.js";
+import { UI_SETTINGS_PATH, MEDIAMTX_PUBLIC_HLS_URL_DEFAULT, MEDIAMTX_RTSP_URL } from "../env.js";
 
 const router = Router();
 
@@ -31,7 +31,10 @@ router.patch("/global", async (req: Request, res: Response) => {
 // --- UI settings (HLS preview URL, etc.) ---
 function loadUiSettings() {
   try {
-    return JSON.parse(fs.readFileSync(UI_SETTINGS_PATH, "utf8"));
+    const data = JSON.parse(fs.readFileSync(UI_SETTINGS_PATH, "utf8"));
+    return {
+      publicHlsUrl: data.publicHlsUrl || MEDIAMTX_PUBLIC_HLS_URL_DEFAULT,
+    };
   } catch {
     return { publicHlsUrl: MEDIAMTX_PUBLIC_HLS_URL_DEFAULT };
   }
@@ -43,7 +46,11 @@ function saveUiSettings(s: any) {
 }
 
 router.get("/ui", (req: Request, res: Response) => {
-  res.json(loadUiSettings());
+  const settings = loadUiSettings();
+  res.json({
+    ...settings,
+    rtspUrl: MEDIAMTX_RTSP_URL,
+  });
 });
 
 router.put("/ui", (req: Request, res: Response) => {
@@ -53,7 +60,7 @@ router.put("/ui", (req: Request, res: Response) => {
       current.publicHlsUrl = String(req.body.publicHlsUrl).trim();
     }
     saveUiSettings(current);
-    res.json({ ok: true, settings: current });
+    res.json({ ok: true, settings: { ...current, rtspUrl: MEDIAMTX_RTSP_URL } });
   } catch (err: any) {
     res.status(500).json({ error: err.message || String(err) });
   }

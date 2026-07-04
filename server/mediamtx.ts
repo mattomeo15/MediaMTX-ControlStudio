@@ -5,7 +5,7 @@ import {
 } from "./env.js";
 
 function authHeader(): Record<string, string> {
-  if (!MEDIAMTX_API_USER) return {};
+  if (!MEDIAMTX_API_USER || !MEDIAMTX_API_PASS) return {};
   const token = Buffer.from(`${MEDIAMTX_API_USER}:${MEDIAMTX_API_PASS}`).toString("base64");
   return { Authorization: `Basic ${token}` };
 }

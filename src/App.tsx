@@ -62,6 +62,7 @@ export default function App() {
   // App shell states
   const [activeTab, setActiveTab] = useState<"homepage" | "streams" | "photo-loop" | "settings">("homepage");
   const [hlsBaseUrl, setHlsBaseUrl] = useState("");
+  const [rtspBaseUrl, setRtspBaseUrl] = useState("rtsp://127.0.0.1:8554");
 
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
@@ -400,7 +401,7 @@ export default function App() {
 
       // 2. Patch the destination path's config to point to this source
       const destPath = routerSettings.destinationPath || "main";
-      const rtspUrl = "rtsp://127.0.0.1:8554";
+      const rtspUrl = rtspBaseUrl;
       const newSource = `${rtspUrl}/${sourcePath}`;
 
       const configRes = await fetch(`/api/streams/config/${destPath}`, {
@@ -544,6 +545,9 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setHlsBaseUrl(data.publicHlsUrl || window.location.origin.replace(":3000", ":8888"));
+        if (data.rtspUrl) {
+          setRtspBaseUrl(data.rtspUrl);
+        }
       }
     } catch (err) {
       console.error("Failed to load UI settings", err);
@@ -1056,8 +1060,19 @@ export default function App() {
             <Radio className="w-4 h-4 text-white animate-pulse" />
           </div>
           <div>
-            <h2 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 leading-tight">
-              Media MTX<br />Control Studio
+            <h2 className="leading-none flex items-center">
+              <svg viewBox="0 0 150 55" className="h-8 w-auto select-none" xmlns="http://www.w3.org/2000/svg">
+                <text x="2" y="24" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="900" fontSize="25" className="fill-blue-600 dark:fill-blue-400" letterSpacing="-0.5">MEDIA</text>
+                <text x="56" y="49" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="900" fontSize="25" className="fill-cyan-500 dark:fill-cyan-400" letterSpacing="-0.5">MTX</text>
+                <g transform="translate(118, 16)" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="2.5" strokeLinecap="round" fill="none">
+                  <path d="M2,18 A12,12 0 0,1 14,6" strokeWidth="2.2" />
+                  <path d="M2,24 A18,18 0 0,1 20,6" strokeWidth="2.5" />
+                  <path d="M2,30 A24,24 0 0,1 26,6" strokeWidth="2.8" />
+                </g>
+              </svg>
+              <span className="ml-2.5 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase hidden sm:inline-block border-l border-slate-300 dark:border-white/10 pl-2.5">
+                Control Studio
+              </span>
             </h2>
           </div>
         </div>
@@ -1900,11 +1915,11 @@ export default function App() {
                                       <span className="text-blue-400 truncate ml-2 max-w-[140px] hover:underline">/{name}</span>
                                     </div>
                                     <div
-                                      onClick={() => copyToClipboard(`rtsp://localhost:8554/${name}`)}
+                                      onClick={() => copyToClipboard(`${rtspBaseUrl}/${name}`)}
                                       className="flex justify-between items-center bg-slate-950/40 hover:bg-slate-950/60 border border-white/5 px-3 py-2 rounded-xl cursor-pointer transition-colors"
                                     >
-                                      <span className="text-slate-500">RTSP port:</span>
-                                      <span className="text-slate-400 truncate ml-2 max-w-[140px]">8554/{name}</span>
+                                      <span className="text-slate-500">RTSP link:</span>
+                                      <span className="text-slate-400 truncate ml-2 max-w-[140px]">{rtspBaseUrl.replace("rtsp://", "")}/{name}</span>
                                     </div>
                                   </div>
                                 </div>
