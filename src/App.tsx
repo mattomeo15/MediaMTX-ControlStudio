@@ -35,7 +35,8 @@ import {
   Monitor,
   ChevronUp,
   ChevronDown,
-  Shuffle
+  Shuffle,
+  Cpu
 } from "lucide-react";
 import {
   ActivePath,
@@ -161,6 +162,49 @@ export default function App() {
   // Real-time Dashboard state
   const [selectedMonitorPath, setSelectedMonitorPath] = useState<string>("main");
   const [computedBitrates, setComputedBitrates] = useState<Record<string, number>>({});
+
+  // System Stats and Connection Status
+  const [systemStats, setSystemStats] = useState<{
+    uptime: number;
+    memoryRss: number;
+    activePathsCount: number;
+    configuredPathsCount: number;
+    totalViewers: number;
+    mediaMtxConnected: boolean;
+    alertsCount: number;
+  } | null>(null);
+  const [isMtxConnected, setIsMtxConnected] = useState<boolean | null>(null);
+
+  const formatUptime = (totalSeconds: number): string => {
+    if (!totalSeconds || isNaN(totalSeconds)) return "0s";
+    const d = Math.floor(totalSeconds / (3600 * 24));
+    const h = Math.floor((totalSeconds % (3600 * 24)) / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    
+    const parts = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h > 0 || d > 0) parts.push(`${h}h`);
+    if (m > 0 || h > 0 || d > 0) parts.push(`${String(m).padStart(2, '0')}m`);
+    parts.push(`${String(s).padStart(2, '0')}s`);
+    return parts.join(" ");
+  };
+
+  const fetchSystemStats = async () => {
+    try {
+      const res = await fetch("/api/streams/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setSystemStats(data);
+        setIsMtxConnected(data.mediaMtxConnected);
+      } else {
+        setIsMtxConnected(false);
+      }
+    } catch (err) {
+      console.error("Error fetching system stats:", err);
+      setIsMtxConnected(false);
+    }
+  };
   const lastActivePathsRef = useRef<{ paths: Record<string, ActivePath>; time: number }>({ paths: {}, time: Date.now() });
 
   useEffect(() => {
@@ -228,13 +272,21 @@ export default function App() {
       fetchUiSettings();
       fetchGlobalConfig();
       fetchMediaStreams();
+      fetchSystemStats();
 
       const interval = setInterval(() => {
         fetchAnnouncementStatus();
         fetchMediaStreams();
       }, 5000);
 
-      return () => clearInterval(interval);
+      const statsInterval = setInterval(() => {
+        fetchSystemStats();
+      }, 12000);
+
+      return () => {
+        clearInterval(interval);
+        clearInterval(statsInterval);
+      };
     }
   }, [isAuthenticated]);
 
@@ -1056,29 +1108,53 @@ export default function App() {
       <header className="w-full h-16 bg-white/5 dark:bg-slate-950/40 backdrop-blur-md border-b border-black/10 dark:border-white/10 flex items-center justify-between px-6 z-20 flex-shrink-0 transition-colors duration-300">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(37,99,235,0.3)]">
-            <Radio className="w-4 h-4 text-white animate-pulse" />
+          <div className="w-9 h-9 bg-slate-900/5 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl flex items-center justify-center p-1 shadow-sm">
+            <img
+              src="https://mediamtx.org/_astro/logo.CDGaJiBm.svg"
+              alt="MediaMTX Logo"
+              className="h-6 w-auto select-none"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <div>
             <h2 className="leading-none flex items-center">
-              <svg viewBox="0 0 150 55" className="h-8 w-auto select-none" xmlns="http://www.w3.org/2000/svg">
-                <text x="2" y="24" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="900" fontSize="25" className="fill-blue-600 dark:fill-blue-400" letterSpacing="-0.5">MEDIA</text>
-                <text x="56" y="49" fontFamily="system-ui, -apple-system, sans-serif" fontWeight="900" fontSize="25" className="fill-cyan-500 dark:fill-cyan-400" letterSpacing="-0.5">MTX</text>
-                <g transform="translate(118, 16)" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="2.5" strokeLinecap="round" fill="none">
-                  <path d="M2,18 A12,12 0 0,1 14,6" strokeWidth="2.2" />
-                  <path d="M2,24 A18,18 0 0,1 20,6" strokeWidth="2.5" />
-                  <path d="M2,30 A24,24 0 0,1 26,6" strokeWidth="2.8" />
-                </g>
-              </svg>
-              <span className="ml-2.5 text-[10px] sm:text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider uppercase hidden sm:inline-block border-l border-slate-300 dark:border-white/10 pl-2.5">
-                Control Studio
+              <span className="text-sm font-black text-slate-800 dark:text-white tracking-widest uppercase font-mono">
+                CONTROL STUDIO
               </span>
             </h2>
           </div>
         </div>
 
-        {/* Right side: Theme Toggle + Sign Out */}
+        {/* Right side: Theme Toggle + Connection Status LED + Sign Out */}
         <div className="flex items-center gap-3 sm:gap-4">
+          {/* LED Connection Indicator */}
+          <div 
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 select-none"
+            title={isMtxConnected === true ? "MediaMTX Backend: Connected" : isMtxConnected === false ? "MediaMTX Backend: Connection Failed" : "MediaMTX Backend: Checking Status..."}
+          >
+            <span className="relative flex h-2 w-2">
+              {isMtxConnected === true ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </>
+              ) : isMtxConnected === false ? (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 animate-pulse"></span>
+                </>
+              ) : (
+                <>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                </>
+              )}
+            </span>
+            <span className={`text-[9px] font-bold font-mono tracking-widest ${isMtxConnected === true ? "text-emerald-600 dark:text-emerald-400" : isMtxConnected === false ? "text-rose-500 dark:text-rose-400" : "text-amber-500"} uppercase hidden md:inline-block`}>
+              {isMtxConnected === true ? "API CONNECTED" : isMtxConnected === false ? "API DISCONNECTED" : "API CHECKING"}
+            </span>
+          </div>
+
           {/* Theme Toggle Widget (extremely compact!) */}
           <div className="flex items-center p-0.5 rounded-md bg-slate-200/60 dark:bg-slate-950/60 border border-slate-300 dark:border-white/5">
             {(["light", "dark", "system"] as const).map((t) => {
@@ -1187,10 +1263,20 @@ export default function App() {
           <div className="px-4">
             <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-500/5 to-purple-500/5 dark:from-blue-500/10 dark:to-purple-500/10 border border-slate-200 dark:border-white/10">
               <div className="flex items-center gap-2 mb-2">
-                <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#10b981] animate-pulse"></span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">Service Healthy</span>
+                <span className={`w-2 h-2 rounded-full ${
+                  isMtxConnected === true 
+                    ? "bg-green-500 shadow-[0_0_8px_#10b981]" 
+                    : isMtxConnected === false 
+                    ? "bg-rose-500 shadow-[0_0_8px_#f43f5e]" 
+                    : "bg-amber-500"
+                } animate-pulse`}></span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-200">
+                  {isMtxConnected === true ? "Service Healthy" : isMtxConnected === false ? "Service Offline" : "Checking Service..."}
+                </span>
               </div>
-              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">Uptime: 4d 12h 04m</p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                Uptime: {systemStats ? formatUptime(systemStats.uptime) : "Calculating..."}
+              </p>
             </div>
           </div>
         </aside>
@@ -1720,6 +1806,90 @@ export default function App() {
                               </div>
                             );
                           })()}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* System & Controller Stats Panel */}
+                  <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
+                    <div
+                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, systemStats: prev.systemStats !== undefined ? !prev.systemStats : false }))}
+                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Cpu className="w-4 h-4 text-emerald-500" />
+                        <div>
+                          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">System Resources</h2>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Real-time sidecar container & MediaMTX stats</p>
+                        </div>
+                      </div>
+                      <div>
+                        {expandedHomepage.systemStats !== false ? (
+                          <ChevronUp className="w-4 h-4 text-slate-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-slate-400" />
+                        )}
+                      </div>
+                    </div>
+
+                    {expandedHomepage.systemStats !== false && (
+                      <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Memory */}
+                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Memory RSS</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
+                                {systemStats ? systemStats.memoryRss : "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">MB</span>
+                            </div>
+                          </div>
+
+                          {/* Heap Used */}
+                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Heap Used</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
+                                {systemStats ? systemStats.memoryHeapUsed : "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase">MB</span>
+                            </div>
+                          </div>
+
+                          {/* Configured Paths */}
+                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Configurations</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
+                                {systemStats ? systemStats.configuredPathsCount : "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">paths</span>
+                            </div>
+                          </div>
+
+                          {/* Active Paths */}
+                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Active Streams</span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
+                                {systemStats ? systemStats.activePathsCount : "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">live</span>
+                            </div>
+                          </div>
+
+                          {/* Total Viewers */}
+                          <div className="col-span-2 bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Total System Audience</span>
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
+                                {systemStats ? systemStats.totalViewers : "—"}
+                              </span>
+                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">active viewer readers</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}

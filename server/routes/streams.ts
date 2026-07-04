@@ -63,6 +63,52 @@ router.post("/router-settings", (req: Request, res: Response) => {
 });
 
 // --- Active runtime paths ---
+router.get("/stats", async (req: Request, res: Response) => {
+  try {
+    let mediaMtxConnected = true;
+    let activePathsCount = 0;
+    let configuredPathsCount = 0;
+    let totalViewers = 0;
+
+    try {
+      const activeData = await mtx.listActivePaths();
+      const list = activeData?.items || [];
+      activePathsCount = list.length;
+      totalViewers = list.reduce((sum: number, item: any) => {
+        const readersCount = item.readers ? item.readers.length : 0;
+        return sum + readersCount;
+      }, 0);
+    } catch (err) {
+      console.error("Failed to query active paths for stats:", err);
+      mediaMtxConnected = false;
+    }
+
+    try {
+      const configData = await mtx.listPathConfigs();
+      const list = configData?.items || [];
+      configuredPathsCount = list.length;
+    } catch (err) {
+      console.error("Failed to query path configs for stats:", err);
+      mediaMtxConnected = false;
+    }
+
+    const memory = process.memoryUsage();
+
+    res.json({
+      uptime: Math.floor(process.uptime()),
+      memoryRss: Math.round(memory.rss / (1024 * 1024)),
+      memoryHeapUsed: Math.round(memory.heapUsed / (1024 * 1024)),
+      mediaMtxConnected,
+      activePathsCount,
+      configuredPathsCount,
+      totalViewers,
+      alertsCount: alerts.length,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 router.get("/active", async (req: Request, res: Response) => {
   try {
     const data = await mtx.listActivePaths();
