@@ -6,7 +6,7 @@ import {
   IMAGES_DIR,
   REEL_PATH,
   SETTINGS_PATH,
-  MEDIAMTX_RTSP_URL,
+  getDynamicRtspUrl,
   ANNOUNCEMENTS_PATH_NAME,
 } from "./env.js";
 
@@ -213,7 +213,7 @@ export function stopStreaming() {
 
 export function startStreaming() {
   stopStreaming();
-  const target = `${MEDIAMTX_RTSP_URL}/${ANNOUNCEMENTS_PATH_NAME}`;
+  const target = `${getDynamicRtspUrl()}/${ANNOUNCEMENTS_PATH_NAME}`;
   const proc = spawn("ffmpeg", [
     "-re", "-stream_loop", "-1", "-i", REEL_PATH,
     "-c", "copy",

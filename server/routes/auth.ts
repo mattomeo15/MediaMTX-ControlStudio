@@ -1,7 +1,18 @@
 import { Router, Request, Response } from "express";
 import { checkPassword, saveStoredPassword, requireAuth } from "../auth.js";
+import * as mtx from "../mediamtx.js";
 
 const router = Router();
+
+router.get("/mediamtx-status", async (req: Request, res: Response) => {
+  try {
+    await mtx.listPathConfigs();
+    res.json({ mediaMtxConnected: true });
+  } catch (err) {
+    console.warn("Public mediamtx-status check: MediaMTX is offline or booting.");
+    res.json({ mediaMtxConnected: false });
+  }
+});
 
 router.post("/login", (req: Request, res: Response) => {
   const { password } = req.body || {};

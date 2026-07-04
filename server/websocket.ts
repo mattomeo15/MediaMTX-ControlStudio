@@ -2,12 +2,13 @@ import { WebSocketServer, WebSocket } from "ws";
 import fs from "fs";
 import path from "path";
 import { Server } from "http";
-import { DATA_DIR, MEDIAMTX_RTSP_URL } from "./env.js";
+import { DATA_DIR, getDynamicRtspUrl } from "./env.js";
 import {
   listActivePaths,
   listPathConfigs,
   addPathConfig,
   patchPathConfig,
+  deletePathConfig,
 } from "./mediamtx.js";
 
 // Alert type definition
@@ -180,7 +181,7 @@ async function runMonitoringCycle() {
     if (rSettings.enabled) {
       const primaryActive = currentReadyMap.get(rSettings.primaryPath) === true;
       const expectedPath = primaryActive ? rSettings.primaryPath : rSettings.fallbackPath;
-      const rtspUrl = MEDIAMTX_RTSP_URL || "rtsp://127.0.0.1:8554";
+      const rtspUrl = getDynamicRtspUrl();
       const expectedSource = `${rtspUrl}/${expectedPath}`;
 
       // Check existing config list
@@ -271,4 +272,23 @@ export function initWebSocketServer(server: Server) {
   // Start periodic 2-second background check
   setInterval(runMonitoringCycle, 2000);
   console.log("WebSocket monitoring and Autopilot loop initialized successfully.");
+
+  // Clear seeded paths on startup to ensure clean slate
+  setTimeout(async () => {
+    try {
+      console.log("Cleaning up default pre-configured streams (live, announcements) for a clean slate startup...");
+      const configData = await listPathConfigs().catch(() => null);
+      if (configData && configData.items) {
+        const items = configData.items || [];
+        for (const item of items) {
+          if (item.name === "live" || item.name === "announcements") {
+            console.log(`Removing pre-configured path config: ${item.name}`);
+            await deletePathConfig(item.name).catch((e: any) => console.error(`Failed to delete path ${item.name}:`, e));
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Could not clean up pre-configured paths:", e);
+    }
+  }, 1500);
 }

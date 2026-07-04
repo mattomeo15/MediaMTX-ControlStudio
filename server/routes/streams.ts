@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { requireAuth } from "../auth.js";
 import * as mtx from "../mediamtx.js";
 import { alerts, getRouterSettings, saveRouterSettings, broadcast } from "../websocket.js";
-import { getMetrics } from "../metrics.js";
+import { getMetrics, getLatestMetrics } from "../metrics.js";
 
 const router = Router();
 
@@ -79,7 +79,7 @@ router.get("/stats", async (req: Request, res: Response) => {
         return sum + readersCount;
       }, 0);
     } catch (err) {
-      console.error("Failed to query active paths for stats:", err);
+      console.warn("Failed to query active paths for stats: MediaMTX is likely starting or offline");
       mediaMtxConnected = false;
     }
 
@@ -88,11 +88,12 @@ router.get("/stats", async (req: Request, res: Response) => {
       const list = configData?.items || [];
       configuredPathsCount = list.length;
     } catch (err) {
-      console.error("Failed to query path configs for stats:", err);
+      console.warn("Failed to query path configs for stats: MediaMTX is likely starting or offline");
       mediaMtxConnected = false;
     }
 
     const memory = process.memoryUsage();
+    const latestMetrics = typeof getLatestMetrics === "function" ? getLatestMetrics() : {};
 
     res.json({
       uptime: Math.floor(process.uptime()),
@@ -103,6 +104,7 @@ router.get("/stats", async (req: Request, res: Response) => {
       configuredPathsCount,
       totalViewers,
       alertsCount: alerts.length,
+      latestMetrics,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message || String(err) });

@@ -64,7 +64,10 @@ export default function App() {
   // App shell states
   const [activeTab, setActiveTab] = useState<"homepage" | "streams" | "photo-loop" | "settings">("homepage");
   const [hlsBaseUrl, setHlsBaseUrl] = useState("");
-  const [rtspBaseUrl, setRtspBaseUrl] = useState("rtsp://127.0.0.1:8554");
+  const [rtspBaseUrl, setRtspBaseUrl] = useState(() => {
+    const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
+    return `rtsp://${host === "localhost" || host === "127.0.0.1" ? "mediamtx" : host}:8554`;
+  });
 
   // Theme state
   const [theme, setTheme] = useState<"light" | "dark" | "system">(() => {
@@ -173,6 +176,7 @@ export default function App() {
     totalViewers: number;
     mediaMtxConnected: boolean;
     alertsCount: number;
+    latestMetrics?: Record<string, any>;
   } | null>(null);
   const [isMtxConnected, setIsMtxConnected] = useState<boolean | null>(null);
 
@@ -264,6 +268,29 @@ export default function App() {
   useEffect(() => {
     checkAuthStatus();
   }, []);
+
+  // Poll public MediaMTX status if not logged in
+  useEffect(() => {
+    if (isAuthenticated === false) {
+      const checkPublicStatus = async () => {
+        try {
+          const res = await fetch("/api/auth/mediamtx-status");
+          if (res.ok) {
+            const data = await res.json();
+            setIsMtxConnected(data.mediaMtxConnected);
+          } else {
+            setIsMtxConnected(false);
+          }
+        } catch {
+          setIsMtxConnected(false);
+        }
+      };
+
+      checkPublicStatus();
+      const interval = setInterval(checkPublicStatus, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
 
   // Poll active streams and status in the background when authenticated
   useEffect(() => {
@@ -1005,12 +1032,40 @@ export default function App() {
           transition={{ duration: 0.4 }}
           className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl relative z-10"
         >
-          <div className="flex flex-col items-center mb-8">
-            <div className="w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-950/20 mb-4 border border-white/10">
-              <Tv className="w-8 h-8 text-white" />
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-1">MediaMTX Studio</h1>
+          <div className="flex flex-col items-center mb-6">
+            <img 
+              src="/mediamtx-logo.png" 
+              alt="MediaMTX Control Studio Logo" 
+              style={{ height: "42.995px", marginRight: "0px", marginBottom: "7px" }} 
+              className="w-auto" 
+            />
+            <h1 className="text-2xl font-bold tracking-tight text-white mb-1">Control Studio</h1>
             <p className="text-xs text-slate-400 font-sans text-center">Broadcasting sidecar and stream controller</p>
+            
+            {/* LED Connection Indicator */}
+            <div className="mt-4 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10 select-none text-center">
+              <span className="relative flex h-2 w-2">
+                {isMtxConnected === true ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </>
+                ) : isMtxConnected === false ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 animate-pulse"></span>
+                  </>
+                ) : (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                  </>
+                )}
+              </span>
+              <span className={`text-[10px] font-bold font-mono tracking-wider ${isMtxConnected === true ? "text-emerald-400" : isMtxConnected === false ? "text-rose-400 animate-pulse" : "text-amber-400"} uppercase`}>
+                {isMtxConnected === true ? "MediaMTX: Online" : isMtxConnected === false ? "MediaMTX: Offline" : "Checking MediaMTX connection..."}
+              </span>
+            </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-5">
@@ -1051,10 +1106,6 @@ export default function App() {
               )}
             </button>
           </form>
-
-          <div className="mt-8 pt-6 border-t border-white/10 text-center">
-            <span className="text-[10px] font-mono text-slate-500 tracking-wider">PORT 3000 // CONTAINER ONLINE</span>
-          </div>
         </motion.div>
       </div>
     );
@@ -1070,8 +1121,6 @@ export default function App() {
 
   const getAvailableSourcesList = (): string[] => {
     const sources = new Set<string>();
-    sources.add("live");
-    sources.add("announcements");
     
     const dest = routerSettings.destinationPath || "main";
     
@@ -1109,10 +1158,21 @@ export default function App() {
       <header className="w-full h-16 bg-white/5 dark:bg-slate-950/40 backdrop-blur-md border-b border-black/10 dark:border-white/10 flex items-center justify-between px-6 z-20 flex-shrink-0 transition-colors duration-300">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <MediaMtxLogo className="h-8 w-auto" />
-          <div className="border-l border-slate-300 dark:border-white/10 pl-3 ml-1 hidden sm:block">
+          <img 
+            src="/mediamtx-logo.png" 
+            alt="MediaMTX Control Studio Logo" 
+            className="h-8 w-auto" 
+            style={{ marginRight: "-10px" }} 
+          />
+          <div 
+            className="border-l border-slate-300 dark:border-white/10 pl-3 hidden sm:block flex items-center" 
+            style={{ marginLeft: "0px", height: "15.99px" }}
+          >
             <h2 className="leading-none flex items-center">
-              <span className="text-xs font-black text-slate-500 dark:text-slate-400 tracking-widest uppercase font-mono">
+              <span 
+                className="text-slate-500 dark:text-slate-400 tracking-widest uppercase font-mono"
+                style={{ fontSize: "15px", height: "15.99px", fontWeight: "bold" }}
+              >
                 CONTROL STUDIO
               </span>
             </h2>
@@ -1223,7 +1283,7 @@ export default function App() {
                 }`}
               >
                 <Tv className="w-4 h-4" />
-                <span>Photo Loop</span>
+                <span>Media</span>
               </button>
               <button
                 onClick={() => setActiveTab("settings")}
@@ -1310,52 +1370,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Autopilot Status / Override Banner */}
-              <div className={`p-4 border rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-all duration-300 ${
-                routerSettings.enabled 
-                  ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-800 dark:text-emerald-300" 
-                  : "bg-amber-500/10 border-amber-500/25 text-amber-800 dark:text-amber-300"
-              }`}>
-                <div className="flex items-start gap-3">
-                  <div className={`p-2 rounded-xl mt-0.5 flex-shrink-0 ${routerSettings.enabled ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/20 text-amber-600 dark:text-amber-400"}`}>
-                    <Shuffle className={`w-5 h-5 ${routerSettings.enabled ? "animate-spin [animation-duration:15s]" : ""}`} />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                      <span>Stream Autopilot:</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${routerSettings.enabled ? "bg-emerald-500 text-white animate-pulse" : "bg-amber-500 text-white"}`}>
-                        {routerSettings.enabled ? "ACTIVE" : "BYPASSED (MANUAL OVERRIDE)"}
-                      </span>
-                    </h3>
-                    <p className="text-xs opacity-95 mt-1 max-w-2xl leading-relaxed">
-                      {routerSettings.enabled ? (
-                        `Automatically routing stream traffic to output (/${routerSettings.destinationPath || "main"}). Currently pointing to /${activePaths[routerSettings.primaryPath]?.sourceReady ? routerSettings.primaryPath : routerSettings.fallbackPath} as primary failover logic.`
-                      ) : (
-                        `Autopilot routing is currently disabled. The system output (/${routerSettings.destinationPath || "main"}) will remain connected to your selected source stream unless manually toggled or autopilot is resumed.`
-                      )}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex-shrink-0">
-                  {routerSettings.enabled ? (
-                    <button
-                      onClick={() => handleToggleAutopilotOn(false)}
-                      className="py-2 px-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-xl text-xs font-bold transition-all shadow-sm"
-                    >
-                      BYPASS AUTOPILOT
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleToggleAutopilotOn(true)}
-                      className="py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin [animation-duration:4s]" />
-                      <span>RESUME AUTOPILOT</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
               {/* Grid: Player & Selection Controls on left/middle, Health Metrics cards on right/bottom */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
@@ -1386,9 +1400,7 @@ export default function App() {
                             className="bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-slate-200 text-xs py-1 px-2.5 focus:outline-none focus:border-blue-500"
                           >
                             <option value="main" className="bg-slate-100 dark:bg-slate-900">/main (Autopilot Output)</option>
-                            <option value="live" className="bg-slate-100 dark:bg-slate-900">/live (Primary Target)</option>
-                            <option value="announcements" className="bg-slate-100 dark:bg-slate-900">/announcements (Photo Loop)</option>
-                            {pathNames.filter(n => n !== "main" && n !== "live" && n !== "announcements").map(n => (
+                            {pathNames.filter(n => n !== "main").map(n => (
                               <option key={n} value={n} className="bg-slate-100 dark:bg-slate-900">/{n}</option>
                             ))}
                           </select>
@@ -1550,6 +1562,38 @@ export default function App() {
 
                     {expandedHomepage.switcher && (
                       <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
+                        {/* Stream Autopilot Integration Control */}
+                        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-300 ${
+                          routerSettings.enabled 
+                            ? "bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
+                            : "bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-400"
+                        }`}>
+                          <div className="flex items-center gap-2.5">
+                            <Shuffle className={`w-4 h-4 ${routerSettings.enabled ? "animate-spin [animation-duration:15s] text-emerald-500" : "text-amber-500"}`} />
+                            <div>
+                              <span className="text-[11px] font-bold uppercase tracking-wider block">Stream Autopilot Routing</span>
+                              <span className="text-[10px] opacity-80 block mt-0.5">
+                                {routerSettings.enabled 
+                                  ? `Smart routing active. Failover to /${activePaths[routerSettings.primaryPath]?.sourceReady ? routerSettings.primaryPath : routerSettings.fallbackPath}` 
+                                  : "Manual mode active. Autopilot failover routing is bypassed."}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleAutopilotOn(!routerSettings.enabled);
+                            }}
+                            className={`py-1 px-3.5 rounded-lg text-[10px] font-bold uppercase transition-all duration-150 ${
+                              routerSettings.enabled 
+                                ? "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-transparent" 
+                                : "bg-blue-600 hover:bg-blue-500 text-white border border-transparent shadow-lg shadow-blue-500/20"
+                            }`}
+                          >
+                            {routerSettings.enabled ? "BYPASS AUTOPILOT" : "ENABLE AUTOPILOT"}
+                          </button>
+                        </div>
+
                         <div className="space-y-3">
                           {getAvailableSourcesList().length === 0 ? (
                             <div className="text-center py-6 text-slate-500 text-xs">
@@ -1788,12 +1832,14 @@ export default function App() {
                           {(() => {
                             const active = activePaths[selectedMonitorPath];
                             const isLive = active && active.sourceReady;
+                            const latest = systemStats?.latestMetrics?.[selectedMonitorPath];
+                            const loss = latest ? latest.packetLoss : 0;
                             return (
                               <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
                                 <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Packet Loss Rating</span>
                                 <div className="flex items-baseline gap-1">
                                   <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white">
-                                    {isLive ? "0.0" : "—"}
+                                    {isLive ? loss.toFixed(2) : "—"}
                                   </span>
                                   <span className="text-[10px] font-bold text-slate-500 uppercase">%</span>
                                 </div>
@@ -2128,47 +2174,7 @@ export default function App() {
                 )}
               </div>
 
-              {/* Media Stream Loops Manager */}
-              <div className="pt-6 border-t border-white/10">
-                <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                  <div
-                    onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
-                    className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Sliders className="w-4 h-4 text-emerald-500" />
-                      <div>
-                        <h2 className="text-xs font-bold text-white uppercase tracking-wider">Media &amp; YouTube Loop Streams</h2>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Route video loops or YouTube streams into MediaMTX. Run them manually or assign as backups for Failover smart routing.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                    >
-                      {expandedStreams.loops ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
 
-                  {expandedStreams.loops && (
-                    <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                      <MediaStreamManager
-                        configs={mediaStreams}
-                        localFiles={localMediaFiles}
-                        onRefresh={fetchMediaStreams}
-                        hlsBaseUrl={hlsBaseUrl}
-                        onPreview={(url) => setPreviewStream(url)}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
             </motion.div>
           )}
 
@@ -2185,8 +2191,8 @@ export default function App() {
               {/* Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
                 <div>
-                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Photo Loop</h1>
-                  <p className="text-xs text-slate-400 mt-1">Compile high-quality picture loops with custom transitions, running as a constant RTSP loop</p>
+                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Media Studio</h1>
+                  <p className="text-xs text-slate-400 mt-1">Manage MP4 loop configurations, YouTube stream routing, and high-quality picture loop slide shows</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5 border ${
@@ -2474,6 +2480,48 @@ export default function App() {
                   </div>
                 </>
               )}
+
+              {/* Media Stream Loops Manager */}
+              <div className="pt-6 border-t border-white/10">
+                <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
+                  <div
+                    onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
+                    className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Sliders className="w-4 h-4 text-emerald-500" />
+                      <div>
+                        <h2 className="text-xs font-bold text-white uppercase tracking-wider">Media &amp; YouTube Loop Streams</h2>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                          Route video loops or YouTube streams into MediaMTX. Run them manually or assign as backups for Failover smart routing.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
+                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+                    >
+                      {expandedStreams.loops ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+
+                  {expandedStreams.loops && (
+                    <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
+                      <MediaStreamManager
+                        configs={mediaStreams}
+                        localFiles={localMediaFiles}
+                        onRefresh={fetchMediaStreams}
+                        hlsBaseUrl={hlsBaseUrl}
+                        onPreview={(url) => setPreviewStream(url)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
 

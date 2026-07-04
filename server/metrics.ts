@@ -205,3 +205,14 @@ export function getMetrics(streamName: string, range: "24h" | "7d" | "30d" = "24
 
   return result;
 }
+
+export function getLatestMetrics(): Record<string, MetricPoint> {
+  const latest: Record<string, MetricPoint> = {};
+  for (let i = metricsCache.length - 1; i >= 0; i--) {
+    const m = metricsCache[i];
+    if (!latest[m.streamName]) {
+      latest[m.streamName] = m;
+    }
+  }
+  return latest;
+}

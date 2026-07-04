@@ -3,7 +3,7 @@ import { promises as fsp } from "fs";
 import path from "path";
 import { spawn, ChildProcess } from "child_process";
 import ytdl from "@distube/ytdl-core";
-import { DATA_DIR, MEDIAMTX_RTSP_URL } from "./env.js";
+import { DATA_DIR, getDynamicRtspUrl } from "./env.js";
 
 export interface MediaStreamConfig {
   name: string; // Stream route path name, e.g. "my_video"
@@ -64,6 +64,17 @@ export async function addMediaStream(config: Omit<MediaStreamConfig, "status">):
     status: "idle"
   };
 
+  if (newConfig.type === "file") {
+    let filePath = newConfig.sourceUrl;
+    if (!path.isAbsolute(filePath)) {
+      filePath = path.join(MEDIA_DIR, filePath);
+    }
+    console.log(`[MediaStreamer] Registering file stream '/${newConfig.name}'. Checked path: '${filePath}'. Expected storage directory is '${MEDIA_DIR}' (mount your volume at this path if run within Docker).`);
+    if (!fs.existsSync(filePath)) {
+      console.warn(`[MediaStreamer] Note: '${filePath}' is not locally accessible right now. Administrators should place or mount the video file at this location.`);
+    }
+  }
+
   if (existingIndex >= 0) {
     // Stop running process if existing
     await stopMediaStream(config.name);
@@ -99,7 +110,8 @@ export async function startMediaStream(name: string): Promise<boolean> {
   cfg.status = "idle";
   cfg.errorMessage = undefined;
 
-  const targetUrl = `${MEDIAMTX_RTSP_URL}/${name}`;
+  const dynamicRtspBase = getDynamicRtspUrl();
+  const targetUrl = `${dynamicRtspBase}/${name}`;
   console.log(`Starting media stream '${name}' of type '${cfg.type}' to ${targetUrl}`);
 
   try {
@@ -112,8 +124,11 @@ export async function startMediaStream(name: string): Promise<boolean> {
         filePath = path.join(MEDIA_DIR, filePath);
       }
 
+      console.log(`[MediaStreamer] File path accessibility check. Path: '${filePath}'. Expected directory is: '${MEDIA_DIR}'.`);
       if (!fs.existsSync(filePath)) {
-        throw new Error(`Video file not found: ${filePath}`);
+        const errorMsg = `Video file not found at local path '${filePath}'. Please make sure the file is mounted or uploaded into the expected directory '${MEDIA_DIR}'.`;
+        console.error(`[MediaStreamer] Error: ${errorMsg}`);
+        throw new Error(errorMsg);
       }
 
       // Stream a local video file
