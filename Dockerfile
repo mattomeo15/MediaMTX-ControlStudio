@@ -7,7 +7,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install all dependencies (including devDependencies needed for build)
-RUN npm ci
+RUN npm install
 
 # Copy configuration and source files
 COPY tsconfig.json vite.config.ts server.ts index.html ./
@@ -33,7 +33,7 @@ ENV PORT=3000
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy compiled files from builder
 COPY --from=builder /app/dist ./dist
