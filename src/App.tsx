@@ -52,6 +52,7 @@ import {
 // Custom Sub-components
 import StreamMetricsCharts from "./components/StreamMetricsCharts.js";
 import MediaStreamManager, { MediaStreamConfig } from "./components/MediaStreamManager.js";
+import { MediaMtxLogo } from "./components/MediaMtxLogo.js";
 
 export default function App() {
   // Authentication states
@@ -1108,17 +1109,10 @@ export default function App() {
       <header className="w-full h-16 bg-white/5 dark:bg-slate-950/40 backdrop-blur-md border-b border-black/10 dark:border-white/10 flex items-center justify-between px-6 z-20 flex-shrink-0 transition-colors duration-300">
         {/* Logo */}
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-slate-900/5 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-xl flex items-center justify-center p-1 shadow-sm">
-            <img
-              src="https://mediamtx.org/_astro/logo.CDGaJiBm.svg"
-              alt="MediaMTX Logo"
-              className="h-6 w-auto select-none"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-          <div>
+          <MediaMtxLogo className="h-8 w-auto" />
+          <div className="border-l border-slate-300 dark:border-white/10 pl-3 ml-1 hidden sm:block">
             <h2 className="leading-none flex items-center">
-              <span className="text-sm font-black text-slate-800 dark:text-white tracking-widest uppercase font-mono">
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400 tracking-widest uppercase font-mono">
                 CONTROL STUDIO
               </span>
             </h2>
