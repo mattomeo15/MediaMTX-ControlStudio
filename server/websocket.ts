@@ -33,8 +33,8 @@ const ROUTER_SETTINGS_PATH = path.join(DATA_DIR, "router-settings.json");
 
 const defaultRouterSettings: RouterSettings = {
   enabled: false,
-  primaryPath: "live",
-  fallbackPath: "announcements",
+  primaryPath: "",
+  fallbackPath: "",
   destinationPath: "main",
 };
 
@@ -273,22 +273,23 @@ export function initWebSocketServer(server: Server) {
   setInterval(runMonitoringCycle, 2000);
   console.log("WebSocket monitoring and Autopilot loop initialized successfully.");
 
-  // Clear seeded paths on startup to ensure clean slate
-  setTimeout(async () => {
-    try {
-      console.log("Cleaning up default pre-configured streams (live, announcements) for a clean slate startup...");
-      const configData = await listPathConfigs().catch(() => null);
-      if (configData && configData.items) {
-        const items = configData.items || [];
-        for (const item of items) {
-          if (item.name === "live" || item.name === "announcements") {
-            console.log(`Removing pre-configured path config: ${item.name}`);
-            await deletePathConfig(item.name).catch((e: any) => console.error(`Failed to delete path ${item.name}:`, e));
-          }
-        }
+  // Run clean slate routine to remove pre-configured default paths
+  cleanSlateStartup();
+}
+
+async function cleanSlateStartup() {
+  try {
+    console.log("[Clean Slate] Checking MediaMTX for pre-configured 'live' and 'announcements' paths...");
+    setTimeout(async () => {
+      try {
+        await deletePathConfig("live").catch(() => {});
+        await deletePathConfig("announcements").catch(() => {});
+        console.log("[Clean Slate] Successfully removed pre-configured 'live' and 'announcements' paths.");
+      } catch (e) {
+        console.warn("[Clean Slate] Warning while clearing pre-configured paths:", e);
       }
-    } catch (e) {
-      console.warn("Could not clean up pre-configured paths:", e);
-    }
-  }, 1500);
+    }, 5000);
+  } catch (err) {
+    console.error("[Clean Slate] Error in cleanSlateStartup:", err);
+  }
 }

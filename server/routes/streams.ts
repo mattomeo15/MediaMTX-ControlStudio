@@ -11,7 +11,7 @@ router.use(requireAuth);
 // --- Metrics ---
 router.get("/metrics", (req: Request, res: Response) => {
   try {
-    const streamName = String(req.query.streamName || "live");
+    const streamName = String(req.query.streamName || "main");
     const range = (req.query.range || "24h") as "24h" | "7d" | "30d";
     const data = getMetrics(streamName, range);
     res.json(data);
@@ -50,8 +50,8 @@ router.post("/router-settings", (req: Request, res: Response) => {
     const { enabled, primaryPath, fallbackPath, destinationPath } = req.body || {};
     const settings = {
       enabled: !!enabled,
-      primaryPath: String(primaryPath || "live").trim(),
-      fallbackPath: String(fallbackPath || "announcements").trim(),
+      primaryPath: String(primaryPath !== undefined ? primaryPath : "").trim(),
+      fallbackPath: String(fallbackPath !== undefined ? fallbackPath : "").trim(),
       destinationPath: String(destinationPath || "main").trim(),
     };
     saveRouterSettings(settings);

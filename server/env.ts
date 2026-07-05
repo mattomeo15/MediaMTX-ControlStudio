@@ -17,22 +17,35 @@ export const MEDIAMTX_API_PASS = process.env.MEDIAMTX_API_PASS || "";
 export const MEDIAMTX_PUBLIC_HLS_URL_DEFAULT = process.env.MEDIAMTX_PUBLIC_HLS_URL || "";
 
 export function getMediaMtxHost(): string {
-  const apiUrl = process.env.MEDIAMTX_API_URL || "http://127.0.0.1:9997";
+  const apiUrl = process.env.MEDIAMTX_API_URL || "http://mediamtx:9997";
   try {
     const parsed = new URL(apiUrl);
     const host = parsed.hostname;
-    if (host) {
+    if (host && host !== "127.0.0.1" && host !== "localhost" && host !== "0.0.0.0") {
       return host;
     }
   } catch (e) {
     // Regex fallback
     const match = apiUrl.match(/^(?:https?:\/\/)?([^:/]+)/);
-    if (match && match[1]) {
+    if (match && match[1] && match[1] !== "127.0.0.1" && match[1] !== "localhost" && match[1] !== "0.0.0.0") {
       return match[1];
     }
   }
 
-  return "127.0.0.1";
+  // If MEDIAMTX_API_URL is loopback or parsing fails, resolve a non-loopback network interface
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const netList = interfaces[name];
+    if (netList) {
+      for (const net of netList) {
+        if (net.family === "IPv4" && !net.internal) {
+          return net.address;
+        }
+      }
+    }
+  }
+
+  return "mediamtx";
 }
 
 export function getDynamicRtspUrl(): string {

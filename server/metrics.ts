@@ -37,7 +37,7 @@ export function initMetrics() {
 function generateMockHistory() {
   console.log("Pre-populating historical stream health metrics...");
   const now = Date.now();
-  const mockStreams = ["live", "main", "photo_loop"];
+  const mockStreams = ["main"];
   const points: MetricPoint[] = [];
 
   // Let's generate data for 30 days

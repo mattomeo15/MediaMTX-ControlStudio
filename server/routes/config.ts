@@ -48,10 +48,9 @@ function saveUiSettings(s: any) {
 router.get("/ui", (req: Request, res: Response) => {
   const settings = loadUiSettings();
   const host = getMediaMtxHost();
-  const publicHlsUrl = settings.publicHlsUrl || `http://${host}:8888`;
+  const defaultHlsUrl = `http://${host}:8888`;
   res.json({
-    ...settings,
-    publicHlsUrl,
+    publicHlsUrl: settings.publicHlsUrl || defaultHlsUrl,
     rtspUrl: getDynamicRtspUrl(),
   });
 });
@@ -63,9 +62,7 @@ router.put("/ui", (req: Request, res: Response) => {
       current.publicHlsUrl = String(req.body.publicHlsUrl).trim();
     }
     saveUiSettings(current);
-    const host = getMediaMtxHost();
-    const publicHlsUrl = current.publicHlsUrl || `http://${host}:8888`;
-    res.json({ ok: true, settings: { ...current, publicHlsUrl, rtspUrl: getDynamicRtspUrl() } });
+    res.json({ ok: true, settings: { ...current, rtspUrl: getDynamicRtspUrl() } });
   } catch (err: any) {
     res.status(500).json({ error: err.message || String(err) });
   }

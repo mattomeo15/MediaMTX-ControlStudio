@@ -62,7 +62,7 @@ export default function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // App shell states
-  const [activeTab, setActiveTab] = useState<"homepage" | "streams" | "photo-loop" | "settings">("homepage");
+  const [activeTab, setActiveTab] = useState<"homepage" | "streams" | "media" | "settings">("homepage");
   const [hlsBaseUrl, setHlsBaseUrl] = useState("");
   const [rtspBaseUrl, setRtspBaseUrl] = useState(() => {
     const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
@@ -1275,9 +1275,9 @@ export default function App() {
                 <span>Streams</span>
               </button>
               <button
-                onClick={() => setActiveTab("photo-loop")}
+                onClick={() => setActiveTab("media")}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all duration-150 border ${
-                  activeTab === "photo-loop"
+                  activeTab === "media"
                     ? "bg-slate-200/50 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300 dark:border-white/20 shadow-sm"
                     : "text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                 }`}
@@ -1400,9 +1400,14 @@ export default function App() {
                             className="bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-slate-200 text-xs py-1 px-2.5 focus:outline-none focus:border-blue-500"
                           >
                             <option value="main" className="bg-slate-100 dark:bg-slate-900">/main (Autopilot Output)</option>
-                            {pathNames.filter(n => n !== "main").map(n => (
-                              <option key={n} value={n} className="bg-slate-100 dark:bg-slate-900">/{n}</option>
-                            ))}
+                            {pathNames.filter(n => n !== "main").map(n => {
+                              let label = `/${n}`;
+                              if (n === "live") label = "/live (Primary Target)";
+                              if (n === "announcements") label = "/announcements (Photo Loop)";
+                              return (
+                                <option key={n} value={n} className="bg-slate-100 dark:bg-slate-900">{label}</option>
+                              );
+                            })}
                           </select>
                         </div>
                         <button
@@ -1562,36 +1567,51 @@ export default function App() {
 
                     {expandedHomepage.switcher && (
                       <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                        {/* Stream Autopilot Integration Control */}
-                        <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-300 ${
+                        
+                        {/* Stream Autopilot Integrated Toggle */}
+                        <div className={`p-4 border rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-300 ${
                           routerSettings.enabled 
-                            ? "bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/20 text-emerald-800 dark:text-emerald-400" 
-                            : "bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/20 text-amber-800 dark:text-amber-400"
+                            ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-800 dark:text-emerald-300" 
+                            : "bg-amber-500/5 border-amber-500/20 text-amber-800 dark:text-amber-300"
                         }`}>
-                          <div className="flex items-center gap-2.5">
-                            <Shuffle className={`w-4 h-4 ${routerSettings.enabled ? "animate-spin [animation-duration:15s] text-emerald-500" : "text-amber-500"}`} />
+                          <div className="flex items-start gap-3">
+                            <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${routerSettings.enabled ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"}`}>
+                              <Shuffle className={`w-4 h-4 ${routerSettings.enabled ? "animate-spin [animation-duration:15s]" : ""}`} />
+                            </div>
                             <div>
-                              <span className="text-[11px] font-bold uppercase tracking-wider block">Stream Autopilot Routing</span>
-                              <span className="text-[10px] opacity-80 block mt-0.5">
-                                {routerSettings.enabled 
-                                  ? `Smart routing active. Failover to /${activePaths[routerSettings.primaryPath]?.sourceReady ? routerSettings.primaryPath : routerSettings.fallbackPath}` 
-                                  : "Manual mode active. Autopilot failover routing is bypassed."}
-                              </span>
+                              <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 flex-wrap">
+                                <span>Stream Autopilot:</span>
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${routerSettings.enabled ? "bg-emerald-500 text-white animate-pulse" : "bg-amber-500 text-white"}`}>
+                                  {routerSettings.enabled ? "ACTIVE" : "BYPASSED"}
+                                </span>
+                              </p>
+                              <p className="text-[10px] opacity-90 mt-0.5 max-w-xl leading-relaxed">
+                                {routerSettings.enabled ? (
+                                  `Failover routing enabled. Primary: /${routerSettings.primaryPath || "(none)"}, Fallback: /${routerSettings.fallbackPath || "(none)"}.`
+                                ) : (
+                                  `Autopilot is disabled. The system output (/${routerSettings.destinationPath || "main"}) will remain pointed to your manual choice.`
+                                )}
+                              </p>
                             </div>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleToggleAutopilotOn(!routerSettings.enabled);
-                            }}
-                            className={`py-1 px-3.5 rounded-lg text-[10px] font-bold uppercase transition-all duration-150 ${
-                              routerSettings.enabled 
-                                ? "bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 border border-slate-700/50 dark:border-transparent" 
-                                : "bg-blue-600 hover:bg-blue-500 text-white border border-transparent shadow-lg shadow-blue-500/20"
-                            }`}
-                          >
-                            {routerSettings.enabled ? "BYPASS AUTOPILOT" : "ENABLE AUTOPILOT"}
-                          </button>
+                          <div className="flex-shrink-0 self-end sm:self-center">
+                            {routerSettings.enabled ? (
+                              <button
+                                onClick={() => handleToggleAutopilotOn(false)}
+                                className="py-1.5 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-lg text-[10px] font-bold transition-all shadow-sm"
+                              >
+                                BYPASS AUTOPILOT
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleToggleAutopilotOn(true)}
+                                className="py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
+                              >
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin [animation-duration:4s]" />
+                                <span>RESUME AUTOPILOT</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
 
                         <div className="space-y-3">
@@ -1968,7 +1988,7 @@ export default function App() {
                     <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
                       <StreamMetricsCharts
                         availableStreams={Array.from(new Set([
-                          "live", "announcements", "main", ...pathNames, ...mediaStreams.map(m => m.name)
+                          "main", ...pathNames, ...mediaStreams.map(m => m.name)
                         ]))}
                       />
                     </div>
@@ -2174,14 +2194,13 @@ export default function App() {
                 )}
               </div>
 
-
             </motion.div>
           )}
 
-          {/* ====== PHOTO LOOP TAB ====== */}
-          {activeTab === "photo-loop" && (
+          {/* ====== MEDIA MANAGEMENT TAB ====== */}
+          {activeTab === "media" && (
             <motion.div
-              key="photo-loop"
+              key="media"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -2191,8 +2210,8 @@ export default function App() {
               {/* Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
                 <div>
-                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Media Studio</h1>
-                  <p className="text-xs text-slate-400 mt-1">Manage MP4 loop configurations, YouTube stream routing, and high-quality picture loop slide shows</p>
+                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Media Management</h1>
+                  <p className="text-xs text-slate-400 mt-1">Manage photo slideshows, local video loops, and live YouTube streams inside MediaMTX</p>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5 border ${
@@ -2482,44 +2501,24 @@ export default function App() {
               )}
 
               {/* Media Stream Loops Manager */}
-              <div className="pt-6 border-t border-white/10">
-                <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                  <div
-                    onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
-                    className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Sliders className="w-4 h-4 text-emerald-500" />
-                      <div>
-                        <h2 className="text-xs font-bold text-white uppercase tracking-wider">Media &amp; YouTube Loop Streams</h2>
-                        <p className="text-[10px] text-slate-400 mt-1">
-                          Route video loops or YouTube streams into MediaMTX. Run them manually or assign as backups for Failover smart routing.
-                        </p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedStreams((prev) => ({ ...prev, loops: !prev.loops }))}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                    >
-                      {expandedStreams.loops ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
+              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-xl">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <Sliders className="w-4 h-4 text-emerald-500" />
+                  <div>
+                    <h2 className="text-xs font-bold text-white uppercase tracking-wider">Media &amp; YouTube Loop Streams</h2>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Route video loops or YouTube streams into MediaMTX. Run them manually or assign as backups for Failover smart routing.
+                    </p>
                   </div>
-
-                  {expandedStreams.loops && (
-                    <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                      <MediaStreamManager
-                        configs={mediaStreams}
-                        localFiles={localMediaFiles}
-                        onRefresh={fetchMediaStreams}
-                        hlsBaseUrl={hlsBaseUrl}
-                        onPreview={(url) => setPreviewStream(url)}
-                      />
-                    </div>
-                  )}
+                </div>
+                <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-4">
+                  <MediaStreamManager
+                    configs={mediaStreams}
+                    localFiles={localMediaFiles}
+                    onRefresh={fetchMediaStreams}
+                    hlsBaseUrl={hlsBaseUrl}
+                    onPreview={(url) => setPreviewStream(url)}
+                  />
                 </div>
               </div>
             </motion.div>
