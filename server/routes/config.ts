@@ -4,10 +4,15 @@ import path from "path";
 import { requireAuth } from "../auth.js";
 import * as mtx from "../mediamtx.js";
 import { UI_SETTINGS_PATH, MEDIAMTX_PUBLIC_HLS_URL_DEFAULT, getDynamicRtspUrl, getMediaMtxHost } from "../env.js";
+import { getSystemLogs } from "../logger.js";
 
 const router = Router();
 
 router.use(requireAuth);
+
+router.get("/system-logs", (req: Request, res: Response) => {
+  res.json({ logs: getSystemLogs() });
+});
 
 // --- MediaMTX global config ---
 router.get("/global", async (req: Request, res: Response) => {
@@ -34,9 +39,10 @@ function loadUiSettings() {
     const data = JSON.parse(fs.readFileSync(UI_SETTINGS_PATH, "utf8"));
     return {
       publicHlsUrl: data.publicHlsUrl || MEDIAMTX_PUBLIC_HLS_URL_DEFAULT,
+      mediaMtxApiUrl: data.mediaMtxApiUrl || "",
     };
   } catch {
-    return { publicHlsUrl: MEDIAMTX_PUBLIC_HLS_URL_DEFAULT };
+    return { publicHlsUrl: MEDIAMTX_PUBLIC_HLS_URL_DEFAULT, mediaMtxApiUrl: "" };
   }
 }
 
@@ -51,6 +57,7 @@ router.get("/ui", (req: Request, res: Response) => {
   const defaultHlsUrl = `http://${host}:8888`;
   res.json({
     publicHlsUrl: settings.publicHlsUrl || defaultHlsUrl,
+    mediaMtxApiUrl: settings.mediaMtxApiUrl || `http://127.0.0.1:9997`,
     rtspUrl: getDynamicRtspUrl(),
   });
 });
@@ -60,6 +67,9 @@ router.put("/ui", (req: Request, res: Response) => {
     const current = loadUiSettings();
     if (req.body.publicHlsUrl !== undefined) {
       current.publicHlsUrl = String(req.body.publicHlsUrl).trim();
+    }
+    if (req.body.mediaMtxApiUrl !== undefined) {
+      current.mediaMtxApiUrl = String(req.body.mediaMtxApiUrl).trim();
     }
     saveUiSettings(current);
     res.json({ ok: true, settings: { ...current, rtspUrl: getDynamicRtspUrl() } });

@@ -1,5 +1,5 @@
 import {
-  MEDIAMTX_API_URL,
+  getMediaMtxApiUrl,
   MEDIAMTX_API_USER,
   MEDIAMTX_API_PASS,
 } from "./env.js";
@@ -11,7 +11,7 @@ function authHeader(): Record<string, string> {
 }
 
 async function call(method: string, urlPath: string, body?: any): Promise<any> {
-  const url = `${MEDIAMTX_API_URL}${urlPath}`;
+  const url = `${getMediaMtxApiUrl()}${urlPath}`;
   let res: Response;
   try {
     res = await fetch(url, {

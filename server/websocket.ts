@@ -10,6 +10,7 @@ import {
   patchPathConfig,
   deletePathConfig,
 } from "./mediamtx.js";
+import { addLogEntry } from "./logger.js";
 
 // Alert type definition
 export interface StreamAlert {
@@ -110,36 +111,39 @@ async function runMonitoringCycle() {
     for (const [name, wasReady] of pathPreviousReadyState) {
       const isCurrentlyReady = currentReadyMap.get(name) === true;
 
-      if (wasReady && !isCurrentlyReady) {
-        // Disconnected unexpectedly!
-        // Ignore announcements path unless desired, but usually we want to alert on other streams like camera, obs, etc.
-        const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const alert: StreamAlert = {
-          id: alertId,
-          streamName: name,
-          type: "disconnect",
-          message: `Stream '/${name}' disconnected unexpectedly.`,
-          timestamp: new Date().toISOString(),
-          read: false,
-        };
-        alerts.unshift(alert);
-        broadcast("alert", alert);
-        if (alerts.length > 100) alerts.pop();
-      } else if (!wasReady && isCurrentlyReady) {
-        // Stream came back online!
-        const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        const alert: StreamAlert = {
-          id: alertId,
-          streamName: name,
-          type: "connect",
-          message: `Stream '/${name}' is now online!`,
-          timestamp: new Date().toISOString(),
-          read: false,
-        };
-        alerts.unshift(alert);
-        broadcast("alert", alert);
-        if (alerts.length > 100) alerts.pop();
-      }
+        if (wasReady && !isCurrentlyReady) {
+          // Disconnected unexpectedly!
+          const msg = `Stream '/${name}' disconnected unexpectedly.`;
+          addLogEntry("warn", msg);
+          const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          const alert: StreamAlert = {
+            id: alertId,
+            streamName: name,
+            type: "disconnect",
+            message: msg,
+            timestamp: new Date().toISOString(),
+            read: false,
+          };
+          alerts.unshift(alert);
+          broadcast("alert", alert);
+          if (alerts.length > 100) alerts.pop();
+        } else if (!wasReady && isCurrentlyReady) {
+          // Stream came back online!
+          const msg = `Stream '/${name}' is now online!`;
+          addLogEntry("info", msg);
+          const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          const alert: StreamAlert = {
+            id: alertId,
+            streamName: name,
+            type: "connect",
+            message: msg,
+            timestamp: new Date().toISOString(),
+            read: false,
+          };
+          alerts.unshift(alert);
+          broadcast("alert", alert);
+          if (alerts.length > 100) alerts.pop();
+        }
     }
 
     // Next, scan for brand new paths that were not in previous state
@@ -193,9 +197,10 @@ async function runMonitoringCycle() {
         if (destinationConfig) {
           // If the configured source does not match the expected source, update it!
           if (destinationConfig.source !== expectedSource) {
-            console.log(`Failover Director: switching '${rSettings.destinationPath}' source from '${destinationConfig.source}' to '${expectedSource}'`);
+            const msg = `Failover Director: switching '${rSettings.destinationPath}' source from '${destinationConfig.source}' to '${expectedSource}'`;
+            addLogEntry("info", msg);
             await patchPathConfig(rSettings.destinationPath, { source: expectedSource }).catch((e) => {
-              console.error(`Failover Director patch error:`, e);
+              addLogEntry("error", `Failover Director patch error: ${e.message}`);
             });
 
             const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -213,9 +218,10 @@ async function runMonitoringCycle() {
           }
         } else {
           // Create the destination path with the expected source
-          console.log(`Failover Director: creating destination path '${rSettings.destinationPath}' with source '${expectedSource}'`);
+          const msg = `Failover Director: creating destination path '${rSettings.destinationPath}' with source '${expectedSource}'`;
+          addLogEntry("info", msg);
           await addPathConfig(rSettings.destinationPath, { source: expectedSource }).catch((e) => {
-            console.error(`Failover Director create error:`, e);
+            addLogEntry("error", `Failover Director create error: ${e.message}`);
           });
 
           const alertId = `alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
@@ -254,6 +260,7 @@ export function initWebSocketServer(server: Server) {
 
   wss.on("connection", (ws: WebSocket) => {
     connectedClients.add(ws);
+    addLogEntry("debug", "New WebSocket client supervisor connected.");
 
     // Send initial alerts list and router settings immediately on connect
     ws.send(JSON.stringify({ type: "init-alerts", payload: alerts }));
@@ -261,6 +268,7 @@ export function initWebSocketServer(server: Server) {
 
     ws.on("close", () => {
       connectedClients.delete(ws);
+      addLogEntry("debug", "WebSocket client disconnected.");
     });
 
     ws.on("error", (err) => {

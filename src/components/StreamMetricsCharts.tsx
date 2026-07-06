@@ -29,7 +29,7 @@ interface MetricPoint {
 
 export default function StreamMetricsCharts({ availableStreams }: StreamMetricsChartsProps) {
   const [selectedStream, setSelectedStream] = useState<string>("");
-  const [range, setRange] = useState<"24h" | "7d" | "30d">("24h");
+  const [range, setRange] = useState<"1h" | "24h" | "7d" | "30d">("24h");
   const [metrics, setMetrics] = useState<MetricPoint[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -79,7 +79,9 @@ export default function StreamMetricsCharts({ availableStreams }: StreamMetricsC
   const formatXAxis = (tickItem: string) => {
     try {
       const date = new Date(tickItem);
-      if (range === "24h") {
+      if (range === "1h") {
+        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      } else if (range === "24h") {
         return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       } else {
         return date.toLocaleDateString([], { month: "short", day: "numeric" }) + 
@@ -131,18 +133,18 @@ export default function StreamMetricsCharts({ availableStreams }: StreamMetricsC
           </div>
 
           {/* Range Toggle */}
-          <div className="bg-slate-950/40 border border-white/10 rounded-xl p-0.5 flex">
-            {(["24h", "7d", "30d"] as const).map((r) => (
+          <div className="bg-slate-950/40 border border-white/10 rounded-xl p-0.5 flex flex-wrap gap-0.5">
+            {(["1h", "24h", "7d", "30d"] as const).map((r) => (
               <button
                 key={r}
                 onClick={() => setRange(r)}
-                className={`text-[10px] font-bold uppercase py-1 px-3.5 rounded-lg transition-all ${
+                className={`text-[10px] font-bold uppercase py-1 px-3 rounded-lg transition-all ${
                   range === r
                     ? "bg-blue-600 text-white shadow-md shadow-blue-500/10"
                     : "text-slate-400 hover:text-white hover:bg-white/5"
                 }`}
               >
-                {r === "24h" ? "24 Hours" : r === "7d" ? "1 Week" : "1 Month"}
+                {r === "1h" ? "1 Hour" : r === "24h" ? "24 Hours" : r === "7d" ? "1 Week" : "1 Month"}
               </button>
             ))}
           </div>

@@ -9,7 +9,7 @@ router.get("/mediamtx-status", async (req: Request, res: Response) => {
     await mtx.listPathConfigs();
     res.json({ mediaMtxConnected: true });
   } catch (err) {
-    console.warn("Public mediamtx-status check: MediaMTX is offline or booting.");
+    console.log("MediaMTX status check: offline or booting");
     res.json({ mediaMtxConnected: false });
   }
 });
@@ -20,7 +20,13 @@ router.post("/login", (req: Request, res: Response) => {
     const sessionReq = req as any;
     if (sessionReq.session) {
       sessionReq.session.authenticated = true;
-      return res.json({ ok: true });
+      return sessionReq.session.save((err: any) => {
+        if (err) {
+          console.error("Session save error:", err);
+          return res.status(500).json({ error: "Session save failed" });
+        }
+        return res.json({ ok: true });
+      });
     }
   }
   return res.status(401).json({ error: "Incorrect password" });
@@ -49,7 +55,20 @@ router.post("/logout", (req: Request, res: Response) => {
 
 router.get("/status", (req: Request, res: Response) => {
   const sessionReq = req as any;
-  res.json({ authenticated: !!(sessionReq.session && sessionReq.session.authenticated) });
+  let authenticated = !!(sessionReq.session && sessionReq.session.authenticated);
+  if (!authenticated) {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7);
+      if (checkPassword(token)) {
+        authenticated = true;
+        if (sessionReq.session) {
+          sessionReq.session.authenticated = true;
+        }
+      }
+    }
+  }
+  res.json({ authenticated });
 });
 
 export default router;

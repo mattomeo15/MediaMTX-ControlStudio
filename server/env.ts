@@ -1,5 +1,6 @@
 import path from "path";
 import os from "os";
+import fs from "fs";
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data");
 const IMAGES_DIR = path.join(DATA_DIR, "announcements", "images");
@@ -9,15 +10,30 @@ const UI_SETTINGS_PATH = path.join(DATA_DIR, "ui-settings.json");
 
 export const PORT = process.env.PORT || 3000;
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
-export const SESSION_SECRET = process.env.SESSION_SECRET || "dev-secret-change-me";
 
-export const MEDIAMTX_API_URL = process.env.MEDIAMTX_API_URL || "http://127.0.0.1:9997";
+const rawSecret = process.env.SESSION_SECRET;
+export const SESSION_SECRET = (rawSecret && rawSecret !== "undefined" && rawSecret.trim() !== "")
+  ? rawSecret
+  : "dev-secret-stable-key-3f8d9a2c-fallback";
+
+export function getMediaMtxApiUrl(): string {
+  try {
+    if (fs.existsSync(UI_SETTINGS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(UI_SETTINGS_PATH, "utf8"));
+      if (data && data.mediaMtxApiUrl) {
+        return data.mediaMtxApiUrl;
+      }
+    }
+  } catch {}
+  return process.env.MEDIAMTX_API_URL || "http://127.0.0.1:9997";
+}
+
 export const MEDIAMTX_API_USER = process.env.MEDIAMTX_API_USER || "";
 export const MEDIAMTX_API_PASS = process.env.MEDIAMTX_API_PASS || "";
 export const MEDIAMTX_PUBLIC_HLS_URL_DEFAULT = process.env.MEDIAMTX_PUBLIC_HLS_URL || "";
 
 export function getMediaMtxHost(): string {
-  const apiUrl = process.env.MEDIAMTX_API_URL || "http://mediamtx:9997";
+  const apiUrl = getMediaMtxApiUrl();
   try {
     const parsed = new URL(apiUrl);
     const host = parsed.hostname;

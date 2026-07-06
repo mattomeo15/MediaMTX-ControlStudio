@@ -28,6 +28,8 @@ export interface AnnouncementSettings {
   height: number;
   fps: number;
   images: AnnouncementImage[];
+  useCustomDirectory?: boolean;
+  directoryPath?: string;
 }
 
 export interface AnnouncerStatus {
@@ -65,4 +67,14 @@ export interface RouterSettings {
   primaryPath: string;
   fallbackPath: string;
   destinationPath: string;
+}
+
+export interface MediaStreamConfig {
+  name: string;
+  type: "file" | "youtube";
+  sourceUrl: string;
+  loop: boolean;
+  status: "idle" | "streaming" | "error";
+  errorMessage?: string;
+  mediaType?: string;
 }

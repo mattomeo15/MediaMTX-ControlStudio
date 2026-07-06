@@ -12,7 +12,7 @@ router.use(requireAuth);
 router.get("/metrics", (req: Request, res: Response) => {
   try {
     const streamName = String(req.query.streamName || "main");
-    const range = (req.query.range || "24h") as "24h" | "7d" | "30d";
+    const range = (req.query.range || "24h") as "1h" | "24h" | "7d" | "30d";
     const data = getMetrics(streamName, range);
     res.json(data);
   } catch (err: any) {
@@ -79,7 +79,7 @@ router.get("/stats", async (req: Request, res: Response) => {
         return sum + readersCount;
       }, 0);
     } catch (err) {
-      console.warn("Failed to query active paths for stats: MediaMTX is likely starting or offline");
+      console.log("MediaMTX status check: active paths unreachable (MediaMTX offline/booting)");
       mediaMtxConnected = false;
     }
 
@@ -88,7 +88,7 @@ router.get("/stats", async (req: Request, res: Response) => {
       const list = configData?.items || [];
       configuredPathsCount = list.length;
     } catch (err) {
-      console.warn("Failed to query path configs for stats: MediaMTX is likely starting or offline");
+      console.log("MediaMTX status check: path configs unreachable (MediaMTX offline/booting)");
       mediaMtxConnected = false;
     }
 

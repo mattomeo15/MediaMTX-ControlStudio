@@ -159,10 +159,12 @@ export async function recordCurrentMetrics() {
   }
 }
 
-export function getMetrics(streamName: string, range: "24h" | "7d" | "30d" = "24h"): MetricPoint[] {
+export function getMetrics(streamName: string, range: "1h" | "24h" | "7d" | "30d" = "24h"): MetricPoint[] {
   const now = Date.now();
   let cutoff = now - 24 * 60 * 60 * 1000;
-  if (range === "7d") {
+  if (range === "1h") {
+    cutoff = now - 1 * 60 * 60 * 1000;
+  } else if (range === "7d") {
     cutoff = now - 7 * 24 * 60 * 60 * 1000;
   } else if (range === "30d") {
     cutoff = now - 30 * 24 * 60 * 60 * 1000;

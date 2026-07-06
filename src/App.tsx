@@ -36,7 +36,9 @@ import {
   ChevronUp,
   ChevronDown,
   Shuffle,
-  Cpu
+  Cpu,
+  ArrowDownLeft,
+  ArrowUpRight
 } from "lucide-react";
 import {
   ActivePath,
@@ -53,6 +55,10 @@ import {
 import StreamMetricsCharts from "./components/StreamMetricsCharts.js";
 import MediaStreamManager, { MediaStreamConfig } from "./components/MediaStreamManager.js";
 import { MediaMtxLogo } from "./components/MediaMtxLogo.js";
+import HomeTab from "./components/HomeTab.js";
+import InputsTab from "./components/InputsTab.js";
+import OutputsTab from "./components/OutputsTab.js";
+import SettingsTab from "./components/SettingsTab.js";
 
 export default function App() {
   // Authentication states
@@ -61,8 +67,33 @@ export default function App() {
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  const apiFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const headers = new Headers(init?.headers);
+    const token = localStorage.getItem("admin_token");
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
+    const res = await fetch(input, {
+      ...init,
+      headers
+    });
+    if (res.status === 401) {
+      const urlStr = typeof input === "string" ? input : input.toString();
+      if (urlStr.includes("/api/auth/status") || urlStr.includes("/api/auth/login")) {
+        setIsAuthenticated(false);
+        localStorage.removeItem("admin_token");
+      }
+      throw new Error("Unauthorized");
+    }
+    const contentType = res.headers.get("content-type");
+    if (contentType && contentType.includes("text/html")) {
+      throw new Error("Received HTML response instead of JSON. The backend might be starting up or offline.");
+    }
+    return res;
+  };
+
   // App shell states
-  const [activeTab, setActiveTab] = useState<"homepage" | "streams" | "media" | "settings">("homepage");
+  const [activeTab, setActiveTab] = useState<"home" | "inputs" | "outputs" | "settings">("home");
   const [hlsBaseUrl, setHlsBaseUrl] = useState("");
   const [rtspBaseUrl, setRtspBaseUrl] = useState(() => {
     const host = typeof window !== "undefined" ? window.location.hostname : "localhost";
@@ -197,17 +228,37 @@ export default function App() {
 
   const fetchSystemStats = async () => {
     try {
-      const res = await fetch("/api/streams/stats");
+      const res = await apiFetch("/api/streams/stats");
       if (res.ok) {
         const data = await res.json();
         setSystemStats(data);
         setIsMtxConnected(data.mediaMtxConnected);
       } else {
         setIsMtxConnected(false);
+        setSystemStats({
+          uptime: 0,
+          memoryRss: 0,
+          activePathsCount: 0,
+          configuredPathsCount: 0,
+          totalViewers: 0,
+          mediaMtxConnected: false,
+          alertsCount: 0,
+        });
       }
-    } catch (err) {
-      console.error("Error fetching system stats:", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Error fetching system stats:", err.message || err);
+      }
       setIsMtxConnected(false);
+      setSystemStats({
+        uptime: 0,
+        memoryRss: 0,
+        activePathsCount: 0,
+        configuredPathsCount: 0,
+        totalViewers: 0,
+        mediaMtxConnected: false,
+        alertsCount: 0,
+      });
     }
   };
   const lastActivePathsRef = useRef<{ paths: Record<string, ActivePath>; time: number }>({ paths: {}, time: Date.now() });
@@ -253,14 +304,16 @@ export default function App() {
 
   const fetchMediaStreams = async () => {
     try {
-      const res = await fetch("/api/media-streams");
+      const res = await apiFetch("/api/media-streams");
       if (res.ok) {
         const data = await res.json();
         setMediaStreams(data.configs || []);
         setLocalMediaFiles(data.localFiles || []);
       }
-    } catch (err) {
-      console.error("Failed to load media loop configs", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to load media loop configs", err.message || err);
+      }
     }
   };
 
@@ -353,8 +406,8 @@ export default function App() {
             } else if (data.type === "streams") {
               setActivePaths(data.payload.activePaths);
             }
-          } catch (err) {
-            console.error("Error parsing WS message:", err);
+          } catch (err: any) {
+            console.warn("Error parsing WS message:", err.message || err);
           }
         };
 
@@ -364,7 +417,7 @@ export default function App() {
         };
 
         ws.onerror = (err) => {
-          console.error("WebSocket encountered error:", err);
+          console.warn("WebSocket connection warning (this is normal during dev server restarts or initial loads)");
         };
       };
 
@@ -396,49 +449,57 @@ export default function App() {
 
   const fetchAlerts = async () => {
     try {
-      const res = await fetch("/api/streams/alerts");
+      const res = await apiFetch("/api/streams/alerts");
       if (res.ok) {
         const data = await res.json();
         setAlerts(data);
       }
-    } catch (err) {
-      console.error("Failed to fetch alerts:", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to fetch alerts:", err.message || err);
+      }
     }
   };
 
   const fetchRouterSettings = async () => {
     try {
-      const res = await fetch("/api/streams/router-settings");
+      const res = await apiFetch("/api/streams/router-settings");
       if (res.ok) {
         const data = await res.json();
         setRouterSettings(data);
       }
-    } catch (err) {
-      console.error("Failed to fetch router settings:", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to fetch router settings:", err.message || err);
+      }
     }
   };
 
   const handleClearAlerts = async () => {
     try {
-      const res = await fetch("/api/streams/alerts/clear", { method: "POST" });
+      const res = await apiFetch("/api/streams/alerts/clear", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setAlerts(data.alerts);
       }
-    } catch (err) {
-      console.error("Failed to clear alerts:", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to clear alerts:", err.message || err);
+      }
     }
   };
 
   const handleMarkAlertRead = async (id: string) => {
     try {
-      const res = await fetch(`/api/streams/alerts/read/${id}`, { method: "POST" });
+      const res = await apiFetch(`/api/streams/alerts/read/${id}`, { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setAlerts(data.alerts);
       }
-    } catch (err) {
-      console.error("Failed to mark alert as read:", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to mark alert as read:", err.message || err);
+      }
     }
   };
 
@@ -576,12 +637,30 @@ export default function App() {
   };
 
   const checkAuthStatus = async () => {
-    try {
-      const res = await fetch("/api/auth/status");
-      const data = await res.json();
-      setIsAuthenticated(data.authenticated);
-    } catch {
+    const token = localStorage.getItem("admin_token");
+    if (!token) {
       setIsAuthenticated(false);
+      return;
+    }
+    try {
+      const headers: Record<string, string> = {
+        "Authorization": `Bearer ${token}`
+      };
+      const res = await fetch("/api/auth/status", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        setIsAuthenticated(data.authenticated);
+        if (!data.authenticated) {
+          localStorage.removeItem("admin_token");
+        }
+      } else {
+        // If server returned 500/502/etc., do not clear user session
+        setIsAuthenticated(true);
+      }
+    } catch (err) {
+      console.warn("Failed to check auth status due to network error:", err);
+      // Fallback: trust the local token during network downtime
+      setIsAuthenticated(true);
     }
   };
 
@@ -596,6 +675,7 @@ export default function App() {
         body: JSON.stringify({ password })
       });
       if (res.ok) {
+        localStorage.setItem("admin_token", password);
         setIsAuthenticated(true);
       } else {
         const err = await res.json();
@@ -610,8 +690,14 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      const token = localStorage.getItem("admin_token");
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+      await fetch("/api/auth/logout", { method: "POST", headers });
     } finally {
+      localStorage.removeItem("admin_token");
       setIsAuthenticated(false);
       setPassword("");
     }
@@ -621,7 +707,7 @@ export default function App() {
 
   const fetchUiSettings = async () => {
     try {
-      const res = await fetch("/api/config/ui");
+      const res = await apiFetch("/api/config/ui");
       if (res.ok) {
         const data = await res.json();
         setHlsBaseUrl(data.publicHlsUrl || window.location.origin.replace(":3000", ":8888"));
@@ -629,8 +715,10 @@ export default function App() {
           setRtspBaseUrl(data.rtspUrl);
         }
       }
-    } catch (err) {
-      console.error("Failed to load UI settings", err);
+    } catch (err: any) {
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to load UI settings", err.message || err);
+      }
     }
   };
 
@@ -638,69 +726,85 @@ export default function App() {
     fetchMediaStreams();
     try {
       const [activeRes, configRes] = await Promise.all([
-        fetch("/api/streams/active"),
-        fetch("/api/streams/config")
+        apiFetch("/api/streams/active").catch(() => null),
+        apiFetch("/api/streams/config").catch(() => null)
       ]);
 
-      if (activeRes.ok) {
-        const activeData = await activeRes.json();
-        // MediaMTX path lists return { items: [...] } or direct arrays depending on configuration
-        const list = activeData.items || [];
-        const activeMap: Record<string, ActivePath> = {};
-        list.forEach((item: any) => {
-          activeMap[item.name] = item;
-        });
-        setActivePaths(activeMap);
+      if (activeRes && activeRes.ok) {
+        try {
+          const activeData = await activeRes.json();
+          const list = activeData.items || [];
+          const activeMap: Record<string, ActivePath> = {};
+          list.forEach((item: any) => {
+            activeMap[item.name] = item;
+          });
+          setActivePaths(activeMap);
+        } catch (e) {
+          console.warn("Failed to parse active streams json", e);
+          setActivePaths({});
+        }
       } else {
-        throw new Error("Unable to retrieve live stream metrics");
+        setActivePaths({});
       }
 
-      if (configRes.ok) {
-        const configData = await configRes.json();
-        const configList = configData.items || [];
-        const configMap: Record<string, PathConfig> = {};
-        configList.forEach((item: any) => {
-          configMap[item.name] = item;
-        });
-        setPathConfigs(configMap);
-        setStreamsError("");
+      if (configRes && configRes.ok) {
+        try {
+          const configData = await configRes.json();
+          const configList = configData.items || [];
+          const configMap: Record<string, PathConfig> = {};
+          configList.forEach((item: any) => {
+            configMap[item.name] = item;
+          });
+          setPathConfigs(configMap);
+          setStreamsError("");
+        } catch (e) {
+          console.warn("Failed to parse streams config json", e);
+          setPathConfigs({});
+        }
       } else {
-        throw new Error("Unable to retrieve persistent path configs");
+        setPathConfigs({});
       }
     } catch (err: any) {
-      // Don't flag error if just fetching background, but show state
-      setStreamsError(err.message || "Failed to fetch stream configuration from MediaMTX");
+      setActivePaths({});
+      setPathConfigs({});
+      if (err.message !== "Unauthorized") {
+        setStreamsError(err.message || "Failed to fetch stream configuration from MediaMTX");
+      }
     }
   };
 
   const fetchAnnouncementData = async () => {
     try {
-      const res = await fetch("/api/announcements/settings");
+      const res = await apiFetch("/api/announcements/settings");
       if (res.ok) {
         const data = await res.json();
         setAnnouncementSettings(data);
       }
     } catch (err: any) {
-      setAnnouncementsError("Failed to fetch slideshow settings");
+      if (err.message !== "Unauthorized") {
+        setAnnouncementsError("Failed to fetch slideshow settings");
+      }
     }
   };
 
   const fetchAnnouncementStatus = async () => {
     try {
-      const res = await fetch("/api/announcements/status");
+      const res = await apiFetch("/api/announcements/status");
       if (res.ok) {
         const data = await res.json();
         setAnnouncerStatus(data);
       }
     } catch (err: any) {
-      console.error("Failed to update slideshow state", err);
+      if (err.message !== "Unauthorized") {
+        console.warn("Failed to update slideshow state", err.message || err);
+      }
     }
   };
 
   const fetchGlobalConfig = async () => {
     setIsLoadingConfig(true);
     try {
-      const res = await fetch("/api/config/global");
+      const res = await apiFetch("/api/config/global");
       if (res.ok) {
         const data = await res.json();
         setGlobalConfig(data);
@@ -709,7 +813,9 @@ export default function App() {
         throw new Error("Failed to load configuration");
       }
     } catch (err: any) {
-      setConfigError(err.message || "Unreachable MediaMTX service. Configure the control API correctly.");
+      if (err.message !== "Unauthorized") {
+        setConfigError(err.message || "Unreachable MediaMTX service. Configure the control API correctly.");
+      }
     } finally {
       setIsLoadingConfig(false);
     }
@@ -1145,6 +1251,70 @@ export default function App() {
     return Array.from(sources).sort();
   };
 
+  const onAddPath = async (name: string, config: any) => {
+    const res = await fetch(`/api/streams/config/${encodeURIComponent(name)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to create stream path");
+    }
+    fetchStreamsData();
+  };
+
+  const onEditPath = async (name: string, config: any) => {
+    const res = await fetch(`/api/streams/config/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to update stream path");
+    }
+    fetchStreamsData();
+  };
+
+  const onDeletePath = async (name: string) => {
+    const res = await fetch(`/api/streams/config/${encodeURIComponent(name)}`, {
+      method: "DELETE"
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to delete stream path");
+    }
+    fetchStreamsData();
+  };
+
+  const onUpdateRouterSettings = async (settings: RouterSettings) => {
+    const res = await fetch("/api/streams/router-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(settings),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to update autopilot router settings");
+    }
+    const data = await res.json();
+    setRouterSettings(data.settings);
+  };
+
+  const onUpdatePathConfig = async (name: string, config: PathConfig) => {
+    const res = await fetch(`/api/streams/config/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || "Failed to update path configuration");
+    }
+    fetchStreamsData();
+  };
+
   // Combine Active configurations and dynamic metrics
   const pathNames = Array.from(new Set([
     ...Object.keys(pathConfigs),
@@ -1236,6 +1406,20 @@ export default function App() {
             })}
           </div>
 
+          {/* Notification Badge Button */}
+          <button
+            onClick={() => setShowAlertsPanel(true)}
+            className="relative p-2 rounded-xl bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-all flex items-center justify-center"
+            title="System Alerts"
+          >
+            <Bell className="w-4 h-4" />
+            {alerts.filter((a) => !a.read).length > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-[9px] font-bold text-white shadow-[0_0_8px_#f43f5e] animate-pulse">
+                {alerts.filter((a) => !a.read).length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={handleLogout}
             className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg border border-slate-200 dark:border-white/10 hover:bg-rose-500/10 text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-500/20 transition-all text-[11px] font-bold uppercase tracking-wider"
@@ -1253,37 +1437,37 @@ export default function App() {
             {/* Navigation Links */}
             <nav className="px-3 space-y-1.5">
               <button
-                onClick={() => setActiveTab("homepage")}
+                onClick={() => setActiveTab("home")}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all duration-150 border ${
-                  activeTab === "homepage"
+                  activeTab === "home"
                     ? "bg-slate-200/50 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300 dark:border-white/20 shadow-sm"
                     : "text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
                 <Home className="w-4 h-4" />
-                <span>Homepage</span>
+                <span>Home</span>
               </button>
               <button
-                onClick={() => setActiveTab("streams")}
+                onClick={() => setActiveTab("inputs")}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all duration-150 border ${
-                  activeTab === "streams"
+                  activeTab === "inputs"
                     ? "bg-slate-200/50 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300 dark:border-white/20 shadow-sm"
                     : "text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
-                <Video className="w-4 h-4" />
-                <span>Streams</span>
+                <ArrowDownLeft className="w-4 h-4 text-emerald-500" />
+                <span>Input Streams</span>
               </button>
               <button
-                onClick={() => setActiveTab("media")}
+                onClick={() => setActiveTab("outputs")}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all duration-150 border ${
-                  activeTab === "media"
+                  activeTab === "outputs"
                     ? "bg-slate-200/50 dark:bg-white/10 text-slate-900 dark:text-white border-slate-300 dark:border-white/20 shadow-sm"
                     : "text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
                 }`}
               >
-                <Tv className="w-4 h-4" />
-                <span>Media</span>
+                <ArrowUpRight className="w-4 h-4 text-sky-500" />
+                <span>Output Streams</span>
               </button>
               <button
                 onClick={() => setActiveTab("settings")}
@@ -1295,20 +1479,6 @@ export default function App() {
               >
                 <Settings className="w-4 h-4" />
                 <span>Settings</span>
-              </button>
-              <button
-                onClick={() => setShowAlertsPanel(true)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all duration-150 border text-slate-500 dark:text-slate-400 border-transparent hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-white"
-              >
-                <div className="flex items-center gap-3">
-                  <Bell className="w-4 h-4 text-amber-500" />
-                  <span>System Alerts</span>
-                </div>
-                {alerts.filter((a) => !a.read).length > 0 && (
-                  <span className="bg-rose-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-[0_0_8px_#f43f5e] animate-pulse">
-                    {alerts.filter((a) => !a.read).length}
-                  </span>
-                )}
               </button>
             </nav>
           </div>
@@ -1339,1652 +1509,104 @@ export default function App() {
         <main className="flex-1 overflow-y-auto px-6 md:px-10 py-8 max-w-7xl mx-auto w-full">
         <AnimatePresence mode="wait">
 
-          {/* ====== HOMEPAGE TAB ====== */}
-          {activeTab === "homepage" && (
-            <motion.div
-              key="homepage"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-800 dark:text-white uppercase tracking-wider">Broadcaster Dashboard</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Live player monitoring, route selectors, stream health metrics, and on-demand start/stop triggers</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      fetchStreamsData();
-                      fetchAnnouncementStatus();
-                      fetchMediaStreams();
-                    }}
-                    className="p-2 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>REFRESH</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid: Player & Selection Controls on left/middle, Health Metrics cards on right/bottom */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Left Column: Player & Active Route Controller */}
-                <div className="lg:col-span-2 space-y-6">
-                  {/* Player & Monitor */}
-                  <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                    <div
-                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, monitor: !prev.monitor }))}
-                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Monitor className="w-4 h-4 text-blue-500" />
-                        <div>
-                          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Live Output Monitor</h2>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Real-time HLS feed playback and stream routing overview</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Monitor Path:</span>
-                          <select
-                            value={selectedMonitorPath}
-                            onChange={(e) => {
-                              setSelectedMonitorPath(e.target.value);
-                              setPreviewStream(`${hlsBaseUrl}/${e.target.value}`);
-                            }}
-                            className="bg-slate-100 dark:bg-slate-950/60 border border-slate-200 dark:border-white/10 rounded-lg text-slate-800 dark:text-slate-200 text-xs py-1 px-2.5 focus:outline-none focus:border-blue-500"
-                          >
-                            <option value="main" className="bg-slate-100 dark:bg-slate-900">/main (Autopilot Output)</option>
-                            {pathNames.filter(n => n !== "main").map(n => {
-                              let label = `/${n}`;
-                              if (n === "live") label = "/live (Primary Target)";
-                              if (n === "announcements") label = "/announcements (Photo Loop)";
-                              return (
-                                <option key={n} value={n} className="bg-slate-100 dark:bg-slate-900">{label}</option>
-                              );
-                            })}
-                          </select>
-                        </div>
-                        <button
-                          onClick={() => setExpandedHomepage((prev) => ({ ...prev, monitor: !prev.monitor }))}
-                          className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                        >
-                          {expandedHomepage.monitor ? (
-                            <ChevronUp className="w-4 h-4" />
-                          ) : (
-                            <ChevronDown className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {expandedHomepage.monitor && (
-                      <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                        {/* Stream Video Player Frame */}
-                        <div className="aspect-video w-full bg-slate-950 rounded-xl overflow-hidden border border-slate-200 dark:border-white/5 relative flex items-center justify-center">
-                          {/* Try playing stream if it is active */}
-                          {(() => {
-                            const active = activePaths[selectedMonitorPath];
-                            const isLive = active && active.sourceReady;
-                            
-                            if (isLive && previewStream) {
-                              return (
-                                <video
-                                  src={previewStream}
-                                  controls
-                                  autoPlay
-                                  muted
-                                  className="w-full h-full object-contain"
-                                  referrerPolicy="no-referrer"
-                                />
-                              );
-                            } else {
-                              return (
-                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 space-y-3">
-                                  <Radio className="w-12 h-12 text-slate-600 animate-pulse" />
-                                  <div>
-                                    <p className="text-sm font-bold text-slate-300">Stream Output is Offline</p>
-                                    <p className="text-xs text-slate-500 mt-1">Select an active path or start a fallback loop below to stream</p>
-                                  </div>
-                                </div>
-                              );
-                            }
-                          })()}
-                        </div>
-
-                        {/* Quick controls for the selected stream path */}
-                        {(() => {
-                          const pathName = selectedMonitorPath;
-                          const active = activePaths[pathName];
-                          const isLive = !!(active && active.sourceReady);
-                          const isPhotoLoop = pathName === "announcements";
-                          const mediaConfig = mediaStreams.find(m => m.name === pathName);
-                          
-                          return (
-                            <div className="bg-slate-100/50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/5 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                              <div className="space-y-1">
-                                <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                  <span className={`w-2 h-2 rounded-full ${isLive || (isPhotoLoop && announcerStatus.status === "streaming") ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
-                                  <span>Active Path: /{pathName}</span>
-                                </p>
-                                <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                  {isPhotoLoop
-                                    ? "Renders a high-resolution canvas loop using your uploaded photos."
-                                    : mediaConfig
-                                    ? `Plays standard MP4 file or YouTube stream loop on-demand.`
-                                    : "Static RTSP/RTMP ingest point. Stream from external sources like OBS or FFmpeg."
-                                  }
-                                </p>
-                              </div>
-
-                              {/* START/STOP toggles on the homepage */}
-                              <div className="flex items-center gap-2">
-                                {isPhotoLoop ? (
-                                  announcerStatus.status === "streaming" ? (
-                                    <button
-                                      onClick={stopReel}
-                                      className="w-full md:w-auto py-2 px-4 bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-500 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
-                                    >
-                                      <Square className="w-3.5 h-3.5 fill-current" />
-                                      <span>STOP PHOTO LOOP</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={buildAndStreamReel}
-                                      disabled={announcerStatus.status === "rendering"}
-                                      className="w-full md:w-auto py-2 px-5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/15 disabled:opacity-50"
-                                    >
-                                      <Play className="w-3.5 h-3.5 fill-current" />
-                                      <span>START PHOTO LOOP</span>
-                                    </button>
-                                  )
-                                ) : mediaConfig ? (
-                                  mediaConfig.status === "streaming" ? (
-                                    <button
-                                      onClick={async () => {
-                                        await fetch(`/api/media-streams/stop/${mediaConfig.name}`, { method: "POST" });
-                                        fetchMediaStreams();
-                                      }}
-                                      className="w-full md:w-auto py-2 px-4 bg-rose-600/10 hover:bg-rose-600/20 border border-rose-500/20 text-rose-500 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5"
-                                    >
-                                      <Square className="w-3.5 h-3.5 fill-current" />
-                                      <span>STOP MEDIA LOOP</span>
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={async () => {
-                                        await fetch(`/api/media-streams/start/${mediaConfig.name}`, { method: "POST" });
-                                        fetchMediaStreams();
-                                      }}
-                                      className="w-full md:w-auto py-2 px-5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-lg shadow-blue-500/15"
-                                    >
-                                      <Play className="w-3.5 h-3.5 fill-current" />
-                                      <span>START MEDIA LOOP</span>
-                                    </button>
-                                  )
-                                ) : (
-                                  <div className="text-[10px] bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 rounded-xl px-3 py-2 text-slate-500 dark:text-slate-400 font-mono">
-                                    USE OBS INGEST TO START
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Active Source Switcher */}
-                  <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                    <div
-                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, switcher: !prev.switcher }))}
-                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Tv className="w-4 h-4 text-purple-500" />
-                        <div>
-                          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Active Stream Switcher</h2>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Toggle live paths directly to the system output (/{routerSettings.destinationPath || "main"})</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-mono text-slate-400 mr-2">
-                          Routed: <span className="font-bold text-blue-500">/{getCurrentlyRoutedSource() || "none"}</span>
-                        </span>
-                        {expandedHomepage.switcher ? (
-                          <ChevronUp className="w-4 h-4 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-400" />
-                        )}
-                      </div>
-                    </div>
-
-                    {expandedHomepage.switcher && (
-                      <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                        
-                        {/* Stream Autopilot Integrated Toggle */}
-                        <div className={`p-4 border rounded-xl mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-all duration-300 ${
-                          routerSettings.enabled 
-                            ? "bg-emerald-500/5 border-emerald-500/20 text-emerald-800 dark:text-emerald-300" 
-                            : "bg-amber-500/5 border-amber-500/20 text-amber-800 dark:text-amber-300"
-                        }`}>
-                          <div className="flex items-start gap-3">
-                            <div className={`p-2 rounded-lg flex-shrink-0 mt-0.5 ${routerSettings.enabled ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"}`}>
-                              <Shuffle className={`w-4 h-4 ${routerSettings.enabled ? "animate-spin [animation-duration:15s]" : ""}`} />
-                            </div>
-                            <div>
-                              <p className="text-xs font-bold uppercase tracking-wider flex items-center gap-2 flex-wrap">
-                                <span>Stream Autopilot:</span>
-                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold ${routerSettings.enabled ? "bg-emerald-500 text-white animate-pulse" : "bg-amber-500 text-white"}`}>
-                                  {routerSettings.enabled ? "ACTIVE" : "BYPASSED"}
-                                </span>
-                              </p>
-                              <p className="text-[10px] opacity-90 mt-0.5 max-w-xl leading-relaxed">
-                                {routerSettings.enabled ? (
-                                  `Failover routing enabled. Primary: /${routerSettings.primaryPath || "(none)"}, Fallback: /${routerSettings.fallbackPath || "(none)"}.`
-                                ) : (
-                                  `Autopilot is disabled. The system output (/${routerSettings.destinationPath || "main"}) will remain pointed to your manual choice.`
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex-shrink-0 self-end sm:self-center">
-                            {routerSettings.enabled ? (
-                              <button
-                                onClick={() => handleToggleAutopilotOn(false)}
-                                className="py-1.5 px-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:opacity-90 rounded-lg text-[10px] font-bold transition-all shadow-sm"
-                              >
-                                BYPASS AUTOPILOT
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleToggleAutopilotOn(true)}
-                                className="py-1.5 px-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-[10px] font-bold transition-all shadow-lg shadow-blue-500/20 flex items-center gap-1.5"
-                              >
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin [animation-duration:4s]" />
-                                <span>RESUME AUTOPILOT</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          {getAvailableSourcesList().length === 0 ? (
-                            <div className="text-center py-6 text-slate-500 text-xs">
-                              No potential streaming sources configured.
-                            </div>
-                          ) : (
-                            getAvailableSourcesList().map((name) => {
-                              const active = activePaths[name];
-                              const isReady = !!(active && active.sourceReady);
-                              const isCurrentlyRouted = getCurrentlyRoutedSource() === name;
-                              const isPhotoLoop = name === "announcements";
-                              const mediaConfig = mediaStreams.find((m) => m.name === name);
-
-                              return (
-                                <div
-                                  key={name}
-                                  className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-xl gap-4 transition-all duration-200 ${
-                                    isCurrentlyRouted
-                                      ? "bg-blue-600/10 border-blue-500/40 shadow-inner"
-                                      : isReady
-                                      ? "bg-slate-100/40 dark:bg-slate-950/20 border-slate-200 dark:border-white/5 hover:border-slate-300 dark:hover:border-white/10"
-                                      : "bg-slate-50/20 dark:bg-slate-950/5 border-slate-200/50 dark:border-white/5 opacity-75"
-                                  }`}
-                                >
-                                  <div className="flex items-start gap-3">
-                                    <div className={`p-2.5 rounded-xl ${
-                                      isCurrentlyRouted 
-                                        ? "bg-blue-500/20 text-blue-600 dark:text-blue-400" 
-                                        : isReady 
-                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" 
-                                        : "bg-slate-100 dark:bg-white/5 text-slate-400"
-                                    }`}>
-                                      {isPhotoLoop ? (
-                                        <FileImage className="w-4 h-4" />
-                                      ) : mediaConfig ? (
-                                        <Video className="w-4 h-4" />
-                                      ) : (
-                                        <Radio className="w-4 h-4" />
-                                      )}
-                                    </div>
-                                    <div className="space-y-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 font-mono">
-                                          /{name}
-                                        </span>
-                                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                                          isReady
-                                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 animate-pulse"
-                                            : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400"
-                                        }`}>
-                                          {isReady ? "Ready to Stream" : "Offline"}
-                                        </span>
-                                        {isCurrentlyRouted && (
-                                          <span className="text-[9px] bg-blue-500 text-white px-2 py-0.5 rounded-full font-extrabold uppercase tracking-wider">
-                                            Active Output
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                                        {isPhotoLoop
-                                          ? "Interactive high-res image transitions engine"
-                                          : mediaConfig
-                                          ? `Dynamic MP4 loop configuration: ${mediaConfig.mediaType}`
-                                          : "Static OBS RTSP broadcast ingestion point"}
-                                      </p>
-                                    </div>
-                                  </div>
-
-                                  <div className="flex items-center gap-2 self-end sm:self-center flex-wrap">
-                                    {/* Optional Start/Stop quick toggle for fallbacks */}
-                                    {isPhotoLoop && (
-                                      announcerStatus.status === "streaming" ? (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            stopReel();
-                                          }}
-                                          className="py-1.5 px-2.5 bg-rose-600/10 hover:bg-rose-600/25 border border-rose-500/20 text-rose-500 text-[10px] font-bold rounded-lg transition-all"
-                                        >
-                                          STOP LOOP
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            buildAndStreamReel();
-                                          }}
-                                          disabled={announcerStatus.status === "rendering"}
-                                          className="py-1.5 px-2.5 bg-purple-600 hover:bg-purple-500 text-white text-[10px] font-bold rounded-lg transition-all disabled:opacity-50"
-                                        >
-                                          START PHOTO LOOP
-                                        </button>
-                                      )
-                                    )}
-
-                                    {mediaConfig && (
-                                      mediaConfig.status === "streaming" ? (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            await fetch(`/api/media-streams/stop/${mediaConfig.name}`, { method: "POST" });
-                                            fetchMediaStreams();
-                                          }}
-                                          className="py-1.5 px-2.5 bg-rose-600/10 hover:bg-rose-600/25 border border-rose-500/20 text-rose-500 text-[10px] font-bold rounded-lg transition-all"
-                                        >
-                                          STOP LOOP
-                                        </button>
-                                      ) : (
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            await fetch(`/api/media-streams/start/${mediaConfig.name}`, { method: "POST" });
-                                            fetchMediaStreams();
-                                          }}
-                                          className="py-1.5 px-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg transition-all"
-                                        >
-                                          START LOOP
-                                        </button>
-                                      )
-                                    )}
-
-                                    {/* Main Route Action */}
-                                    {isCurrentlyRouted ? (
-                                      <div className="flex items-center gap-1 py-1.5 px-3 bg-blue-600/10 border border-blue-500/25 text-blue-500 text-xs font-bold rounded-xl select-none">
-                                        <Check className="w-3.5 h-3.5" />
-                                        <span>ACTIVE</span>
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={() => handleRouteToOutput(name)}
-                                        disabled={!isReady}
-                                        className={`py-1.5 px-3 rounded-xl text-xs font-bold transition-all ${
-                                          isReady
-                                            ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/15 cursor-pointer"
-                                            : "bg-slate-200 dark:bg-white/5 border border-slate-300 dark:border-white/10 text-slate-400 dark:text-slate-500 cursor-not-allowed"
-                                        }`}
-                                      >
-                                        ROUTE TO OUTPUT
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Right Column: Health Status & Bitrates */}
-                <div className="space-y-6">
-                  {/* Stream Health Panel */}
-                  <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                    <div
-                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, health: !prev.health }))}
-                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Sliders className="w-4 h-4 text-emerald-500" />
-                        <div>
-                          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Real-time Stream Health</h2>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Calculated ingestion bitrates, latency, and viewers</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setExpandedHomepage((prev) => ({ ...prev, health: !prev.health }))}
-                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                      >
-                        {expandedHomepage.health ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-
-                    {expandedHomepage.health && (
-                      <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                        {/* Stat Items */}
-                        <div className="grid grid-cols-2 md:grid-cols-1 gap-4">
-                          {/* Health Rating */}
-                          {(() => {
-                            const active = activePaths[selectedMonitorPath];
-                            const isLive = active && active.sourceReady;
-                            return (
-                              <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Health Rating</span>
-                                <div className="flex items-baseline gap-1.5">
-                                  <span className={`text-xl font-bold ${isLive ? "text-emerald-500 dark:text-emerald-400" : "text-slate-400"}`}>
-                                    {isLive ? "OPTIMAL" : "OFFLINE"}
-                                  </span>
-                                  {isLive && <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-wider">100%</span>}
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Real-time Bitrate */}
-                          {(() => {
-                            const pathName = selectedMonitorPath;
-                            const bitrate = computedBitrates[pathName] || 0;
-                            const active = activePaths[pathName];
-                            const isLive = active && active.sourceReady;
-                            
-                            return (
-                              <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Bitrate (Calculated)</span>
-                                <div className="flex items-baseline gap-1">
-                                  <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white">
-                                    {isLive ? `${(bitrate / 1000).toFixed(2)}` : "0.00"}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-slate-500 uppercase">Mbps</span>
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Active Viewers */}
-                          {(() => {
-                            const active = activePaths[selectedMonitorPath];
-                            const readerCount = active?.readers?.length || 0;
-                            return (
-                              <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Viewer Concurrency</span>
-                                <div className="flex items-baseline gap-1">
-                                  <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white">{readerCount}</span>
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase">active</span>
-                                </div>
-                              </div>
-                            );
-                          })()}
-
-                          {/* Packet Loss */}
-                          {(() => {
-                            const active = activePaths[selectedMonitorPath];
-                            const isLive = active && active.sourceReady;
-                            const latest = systemStats?.latestMetrics?.[selectedMonitorPath];
-                            const loss = latest ? latest.packetLoss : 0;
-                            return (
-                              <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Packet Loss Rating</span>
-                                <div className="flex items-baseline gap-1">
-                                  <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white">
-                                    {isLive ? loss.toFixed(2) : "—"}
-                                  </span>
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase">%</span>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* System & Controller Stats Panel */}
-                  <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                    <div
-                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, systemStats: prev.systemStats !== undefined ? !prev.systemStats : false }))}
-                      className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <Cpu className="w-4 h-4 text-emerald-500" />
-                        <div>
-                          <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">System Resources</h2>
-                          <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Real-time sidecar container & MediaMTX stats</p>
-                        </div>
-                      </div>
-                      <div>
-                        {expandedHomepage.systemStats !== false ? (
-                          <ChevronUp className="w-4 h-4 text-slate-400" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4 text-slate-400" />
-                        )}
-                      </div>
-                    </div>
-
-                    {expandedHomepage.systemStats !== false && (
-                      <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          {/* Memory */}
-                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Memory RSS</span>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
-                                {systemStats ? systemStats.memoryRss : "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">MB</span>
-                            </div>
-                          </div>
-
-                          {/* Heap Used */}
-                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Heap Used</span>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
-                                {systemStats ? systemStats.memoryHeapUsed : "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase">MB</span>
-                            </div>
-                          </div>
-
-                          {/* Configured Paths */}
-                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Configurations</span>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
-                                {systemStats ? systemStats.configuredPathsCount : "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">paths</span>
-                            </div>
-                          </div>
-
-                          {/* Active Paths */}
-                          <div className="bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Active Streams</span>
-                            <div className="flex items-baseline gap-1">
-                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
-                                {systemStats ? systemStats.activePathsCount : "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">live</span>
-                            </div>
-                          </div>
-
-                          {/* Total Viewers */}
-                          <div className="col-span-2 bg-slate-100/50 dark:bg-slate-950/20 border border-slate-200 dark:border-white/5 rounded-xl p-4">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">Total System Audience</span>
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-2xl font-mono font-bold text-slate-800 dark:text-white font-semibold">
-                                {systemStats ? systemStats.totalViewers : "—"}
-                              </span>
-                              <span className="text-[10px] font-bold text-slate-500 uppercase font-bold">active viewer readers</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Data Visualization Metrics Charts */}
-              <div className="pt-6 border-t border-slate-200 dark:border-white/10">
-                <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                  <div
-                    onClick={() => setExpandedHomepage((prev) => ({ ...prev, trends: !prev.trends }))}
-                    className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Sliders className="w-4 h-4 text-blue-500" />
-                      <div>
-                        <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Historical Analytics Trends</h2>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Plot bandwidth, frames, packet loss, and viewer concurrency timelines</p>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setExpandedHomepage((prev) => ({ ...prev, trends: !prev.trends }))}
-                      className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                    >
-                      {expandedHomepage.trends ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </button>
-                  </div>
-
-                  {expandedHomepage.trends && (
-                    <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                      <StreamMetricsCharts
-                        availableStreams={Array.from(new Set([
-                          "main", ...pathNames, ...mediaStreams.map(m => m.name)
-                        ]))}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
+                    {/* ====== HOME TAB ====== */}
+          {activeTab === "home" && (
+            <HomeTab
+              pathNames={pathNames}
+              activePaths={activePaths}
+              pathConfigs={pathConfigs}
+              routerSettings={routerSettings}
+              mediaStreams={mediaStreams}
+              announcerStatus={announcerStatus}
+              systemStats={systemStats}
+              selectedMonitorPath={selectedMonitorPath}
+              setSelectedMonitorPath={setSelectedMonitorPath}
+              previewStream={previewStream}
+              setPreviewStream={setPreviewStream}
+              hlsBaseUrl={hlsBaseUrl}
+              computedBitrates={computedBitrates}
+              fetchStreamsData={fetchStreamsData}
+              fetchAnnouncementStatus={fetchAnnouncementStatus}
+              fetchMediaStreams={fetchMediaStreams}
+              handleRouteToOutput={handleRouteToOutput}
+              handleToggleAutopilotOn={handleToggleAutopilotOn}
+              getAvailableSourcesList={getAvailableSourcesList}
+              getCurrentlyRoutedSource={getCurrentlyRoutedSource}
+              stopReel={stopReel}
+              buildAndStreamReel={buildAndStreamReel}
+            />
           )}
 
-          {/* ====== LIVE STREAMS TAB ====== */}
-          {activeTab === "streams" && (
-            <motion.div
-              key="streams"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-                <div>
-                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Live Streams</h1>
-                  <p className="text-xs text-slate-400 mt-1">Manage static routing paths, check reader counts, and view raw video metrics</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={fetchStreamsData}
-                    disabled={isLoadingStreams}
-                    className="p-2 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingStreams ? "animate-spin" : ""}`} />
-                    <span>REFRESH</span>
-                  </button>
-                  <button
-                    onClick={openAddPath}
-                    className="py-2 px-3.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-500/15 transition-all"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>ADD STREAM PATH</span>
-                  </button>
-                </div>
-              </div>
-
-              {streamsError && (
-                <div className="bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs px-4 py-3 rounded-lg flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                  <span>{streamsError}</span>
-                </div>
-              )}
-
-              {/* Ingestion Stream Paths Section */}
-              <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                <div
-                  onClick={() => setExpandedStreams((prev) => ({ ...prev, ingestion: !prev.ingestion }))}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Video className="w-4 h-4 text-blue-500" />
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Active Ingestion Paths</h2>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Real-time status, viewer concurrency, and connection endpoints</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setExpandedStreams((prev) => ({ ...prev, ingestion: !prev.ingestion }))}
-                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-                  >
-                    {expandedStreams.ingestion ? (
-                      <ChevronUp className="w-4 h-4" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-
-                {expandedStreams.ingestion && (
-                  <div className="p-5 border-t border-slate-200 dark:border-white/5 space-y-4">
-                    {pathNames.length === 0 ? (
-                      <div className="border border-dashed border-white/10 rounded-2xl p-16 text-center text-slate-400 space-y-3 bg-white/2">
-                        <Video className="w-10 h-10 mx-auto text-slate-500" />
-                        <p className="text-sm">No streaming paths have been defined yet.</p>
-                        <button
-                          onClick={openAddPath}
-                          className="text-xs font-semibold text-blue-400 hover:text-blue-300 hover:underline"
-                        >
-                          Configure your first live stream path →
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                        {pathNames.map((name) => {
-                          const active = activePaths[name];
-                          const cfg = pathConfigs[name];
-                          const isLive = !!(active && active.sourceReady);
-                          const isConfigOnly = !!cfg && !isLive;
-
-                          // Stream details
-                          const srcUrl = cfg?.source || active?.sourceType || "Push Stream";
-                          const readerCount = active?.readers?.length || 0;
-
-                          return (
-                            <div
-                              key={name}
-                              className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-xl flex flex-col justify-between transition-all duration-300 hover:bg-white/[0.08] hover:border-white/25 hover:shadow-2xl"
-                            >
-                              {/* Header status */}
-                              <div className="bg-white/5 px-4 py-3 border-b border-white/10 flex items-center justify-between">
-                                <div className="flex items-center gap-2 overflow-hidden">
-                                  <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                                    isLive ? "bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse" : isConfigOnly ? "bg-amber-500 shadow-[0_0_8px_#f59e0b]" : "bg-slate-500"
-                                  }`} />
-                                  <span className="font-bold text-white text-xs tracking-wide overflow-hidden text-overflow-ellipsis white-space-nowrap">
-                                    /{name}
-                                  </span>
-                                </div>
-                                <span className="text-[9px] font-mono px-2 py-0.5 rounded-md bg-slate-950/40 border border-white/5 text-slate-400 uppercase">
-                                  {isLive ? "Active Stream" : isConfigOnly ? "Configured" : "Inactive"}
-                                </span>
-                              </div>
-
-                              {/* Stream parameters */}
-                              <div className="p-4 flex-1 space-y-3.5">
-                                <div className="space-y-1.5 text-xs">
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-500">Source:</span>
-                                    <span className="text-slate-300 font-mono text-[11px] truncate max-w-[160px]">{srcUrl}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-500">On-demand:</span>
-                                    <span className="text-slate-300 font-semibold">{cfg?.sourceOnDemand ? "Enabled" : "Disabled"}</span>
-                                  </div>
-                                  <div className="flex justify-between">
-                                    <span className="text-slate-500">Active Viewers:</span>
-                                    <span className="text-slate-100 font-mono font-bold">{readerCount}</span>
-                                  </div>
-                                  {active?.tracks && (
-                                    <div className="flex justify-between">
-                                      <span className="text-slate-500">Tracks:</span>
-                                      <span className="text-slate-300 font-mono text-[10px]">{active.tracks.join(", ")}</span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Action URLs */}
-                                <div className="border-t border-white/10 pt-3 space-y-1.5">
-                                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">STREAM CHANNELS</span>
-                                  <div className="space-y-1.5 text-[10px] font-mono">
-                                    <div
-                                      onClick={() => copyToClipboard(`${hlsBaseUrl}/${name}`)}
-                                      className="flex justify-between items-center bg-slate-950/40 hover:bg-slate-950/60 border border-white/5 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                                    >
-                                      <span className="text-slate-500">HLS preview:</span>
-                                      <span className="text-blue-400 truncate ml-2 max-w-[140px] hover:underline">/{name}</span>
-                                    </div>
-                                    <div
-                                      onClick={() => copyToClipboard(`${rtspBaseUrl}/${name}`)}
-                                      className="flex justify-between items-center bg-slate-950/40 hover:bg-slate-950/60 border border-white/5 px-3 py-2 rounded-xl cursor-pointer transition-colors"
-                                    >
-                                      <span className="text-slate-500">RTSP link:</span>
-                                      <span className="text-slate-400 truncate ml-2 max-w-[140px]">{rtspBaseUrl.replace("rtsp://", "")}/{name}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Action buttons */}
-                              <div className="bg-white/2 px-4 py-3 border-t border-white/10 flex items-center justify-between">
-                                <button
-                                  onClick={() => {
-                                    // preview logic: set HLS url
-                                    setPreviewStream(`${hlsBaseUrl}/${name}`);
-                                  }}
-                                  className="text-[11px] font-bold text-slate-300 hover:text-white flex items-center gap-1 transition-colors"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  <span>PREVIEW</span>
-                                </button>
-
-                                <div className="flex items-center gap-2">
-                                  {cfg && (
-                                    <button
-                                      onClick={() => openEditPath(name, cfg)}
-                                      className="p-1.5 text-slate-400 hover:text-white border border-transparent hover:border-white/10 hover:bg-white/5 rounded-lg transition-all"
-                                    >
-                                      <Settings className="w-3.5 h-3.5" />
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => deletePath(name)}
-                                    className="p-1.5 text-slate-400 hover:text-rose-400 border border-transparent hover:border-white/10 hover:bg-rose-500/10 rounded-lg transition-all"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-
-            </motion.div>
+          {/* ====== INPUTS TAB ====== */}
+          {activeTab === "inputs" && (
+            <InputsTab
+              pathNames={pathNames}
+              activePaths={activePaths}
+              pathConfigs={pathConfigs}
+              mediaStreams={mediaStreams}
+              localMediaFiles={localMediaFiles}
+              announcerStatus={announcerStatus}
+              announcementSettings={announcementSettings}
+              setAnnouncementSettings={setAnnouncementSettings}
+              hlsBaseUrl={hlsBaseUrl}
+              rtspBaseUrl={rtspBaseUrl}
+              fetchStreamsData={fetchStreamsData}
+              fetchMediaStreams={fetchMediaStreams}
+              fetchAnnouncementData={fetchAnnouncementData}
+              setPreviewStream={setPreviewStream}
+              handleFileUpload={handleFileUpload}
+              updateSlideDuration={updateSlideDuration}
+              moveSlide={moveSlide}
+              deleteSlide={deleteSlide}
+              handleSettingsUpdate={handleSettingsUpdate}
+              isSavingSettings={isSavingSettings}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+              onAddPath={onAddPath}
+              onDeletePath={onDeletePath}
+              onEditPath={onEditPath}
+            />
           )}
 
-          {/* ====== MEDIA MANAGEMENT TAB ====== */}
-          {activeTab === "media" && (
-            <motion.div
-              key="media"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-                <div>
-                  <h1 className="text-xl font-bold text-white uppercase tracking-wider">Media Management</h1>
-                  <p className="text-xs text-slate-400 mt-1">Manage photo slideshows, local video loops, and live YouTube streams inside MediaMTX</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold tracking-widest uppercase flex items-center gap-1.5 border ${
-                    announcerStatus.status === "streaming"
-                      ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                      : announcerStatus.status === "rendering"
-                      ? "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse"
-                      : announcerStatus.status === "error"
-                      ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                      : "bg-white/5 border-white/10 text-slate-400"
-                  }`}>
-                    <span className={`w-2 h-2 rounded-full ${
-                      announcerStatus.status === "streaming" ? "bg-emerald-400 animate-pulse" : announcerStatus.status === "rendering" ? "bg-amber-400 animate-spin" : "bg-slate-500"
-                    }`} />
-                    <span>STATUS: {announcerStatus.status}</span>
-                  </div>
-
-                  <button
-                    onClick={stopReel}
-                    className="py-1.5 px-3 bg-white/5 border border-white/10 hover:bg-white/10 hover:text-rose-400 text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1 transition-all"
-                  >
-                    <Square className="w-3.5 h-3.5" />
-                    <span>STOP STREAM</span>
-                  </button>
-                  <button
-                    onClick={buildAndStreamReel}
-                    disabled={announcerStatus.status === "rendering"}
-                    className="py-1.5 px-4 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-500/15 transition-all disabled:opacity-50"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                    <span>BUILD &amp; LOOP</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Status Message Logs */}
-              {announcerStatus.message && (
-                <div className={`text-xs px-4 py-3 rounded-2xl border flex items-start gap-2.5 font-mono overflow-auto backdrop-blur-md ${
-                  announcerStatus.status === "error"
-                    ? "bg-rose-500/10 border-rose-500/20 text-rose-400"
-                    : "bg-emerald-500/5 border border-emerald-500/15 text-emerald-400"
-                }`}>
-                  <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                  <pre className="whitespace-pre-wrap">{announcerStatus.message}</pre>
-                </div>
-              )}
-
-              {/* Layout controls */}
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-xl">
-                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Photo Loop Parameters</h2>
-                <form onSubmit={handleSettingsUpdate} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                  
-                  {/* Custom Folder Source Section */}
-                  <div className="md:col-span-5 bg-slate-950/20 border border-white/5 rounded-xl p-4 mb-2 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id="use-custom-dir"
-                        checked={announcementSettings.useCustomDirectory || false}
-                        onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, useCustomDirectory: e.target.checked }))}
-                        className="w-4 h-4 accent-blue-600 rounded border-white/25 bg-white/5 cursor-pointer"
-                      />
-                      <label htmlFor="use-custom-dir" className="text-xs font-semibold text-slate-300 select-none cursor-pointer">
-                        Direct Photo Loop to play from a custom folder directory
-                      </label>
-                    </div>
-                    {announcementSettings.useCustomDirectory && (
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Absolute Directory Path on Server</label>
-                        <input
-                          type="text"
-                          required
-                          value={announcementSettings.directoryPath || ""}
-                          onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, directoryPath: e.target.value }))}
-                          placeholder="/var/media/photos or relative path like data/photos"
-                          className="w-full bg-slate-950/40 border border-white/10 rounded-xl text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                        />
-                        <p className="text-[9px] text-slate-500 leading-normal font-mono">
-                          If images are added, deleted, or changed in this folder, the system will automatically rebuild and hot-swap the stream loop on-the-fly!
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Transition Type</label>
-                    <select
-                      value={announcementSettings.transitionType}
-                      onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, transitionType: e.target.value }))}
-                      className="w-full bg-slate-950/40 border border-white/10 rounded-xl text-slate-300 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                    >
-                      <option value="none" className="bg-slate-900">None (hard cut)</option>
-                      <option value="fade" className="bg-slate-900">Fade</option>
-                      <option value="dissolve" className="bg-slate-900">Dissolve</option>
-                      <option value="wipeleft" className="bg-slate-900">Wipe left</option>
-                      <option value="wiperight" className="bg-slate-900">Wipe right</option>
-                      <option value="wipeup" className="bg-slate-900">Wipe up</option>
-                      <option value="wipedown" className="bg-slate-900">Wipe down</option>
-                      <option value="slideleft" className="bg-slate-900">Slide left</option>
-                      <option value="slideright" className="bg-slate-900">Slide right</option>
-                      <option value="circleopen" className="bg-slate-900">Circle open</option>
-                      <option value="circleclose" className="bg-slate-900">Circle close</option>
-                      <option value="pixelize" className="bg-slate-900">Pixelize</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Transition Sec</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      min="0.1"
-                      max="10"
-                      value={announcementSettings.transitionDuration}
-                      onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, transitionDuration: Number(e.target.value) }))}
-                      className="w-full bg-slate-950/40 border border-white/10 rounded-xl text-slate-300 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Width (Pixels)</label>
-                    <input
-                      type="number"
-                      value={announcementSettings.width}
-                      onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, width: Number(e.target.value) }))}
-                      className="w-full bg-slate-950/40 border border-white/10 rounded-xl text-slate-300 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Height (Pixels)</label>
-                    <input
-                      type="number"
-                      value={announcementSettings.height}
-                      onChange={(e) => setAnnouncementSettings((prev) => ({ ...prev, height: Number(e.target.value) }))}
-                      className="w-full bg-slate-950/40 border border-white/10 rounded-xl text-slate-300 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <button
-                      type="submit"
-                      disabled={isSavingSettings}
-                      className="w-full py-2 bg-white/5 hover:bg-white/10 text-slate-200 hover:text-white border border-white/10 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1"
-                    >
-                      {isSavingSettings ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sliders className="w-3.5 h-3.5" />}
-                      <span>SAVE DETAILS</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Conditional Upload and Sequence List */}
-              {announcementSettings.useCustomDirectory ? (
-                <div className="border border-dashed border-blue-500/20 rounded-2xl p-8 text-center flex flex-col items-center justify-center gap-3 bg-blue-500/5 backdrop-blur-md">
-                  <div className="w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/20 mb-1">
-                    <FileImage className="w-6 h-6 text-blue-400" />
-                  </div>
-                  <div className="max-w-md space-y-1">
-                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Directory-Based Loop Stream Active</h3>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      Your photo loop is actively playing images loaded from the folder:
-                    </p>
-                    <p className="text-xs font-mono bg-slate-950/40 px-2 py-1 rounded text-blue-300 border border-white/5 inline-block mt-1">
-                      {announcementSettings.directoryPath || "Not set yet"}
-                    </p>
-                    <p className="text-[10px] text-slate-500 font-mono pt-1">
-                      Add, change, or remove images in that folder to update the loop automatically.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {/* Image upload drop zone */}
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-2xl p-10 text-center flex flex-col items-center justify-center gap-3 transition-all duration-300 ${
-                      dragOver ? "border-blue-500 bg-blue-500/10 shadow-[0_0_15px_rgba(59,130,246,0.2)]" : "border-white/10 bg-white/2 hover:bg-white/5"
-                    }`}
-                  >
-                    <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-1">
-                      <UploadCloud className="w-6 h-6 text-slate-300" />
-                    </div>
-                    <div className="space-y-1 text-xs">
-                      <p className="text-slate-300">Drag &amp; drop slide imagery here, or <label className="text-blue-400 font-bold hover:text-blue-300 hover:underline cursor-pointer" htmlFor="img-uploader">browse files</label></p>
-                      <p className="text-slate-500">Supports JPG, PNG, GIF, WebP (up to 50MB each)</p>
-                    </div>
-                    <input
-                      type="file"
-                      id="img-uploader"
-                      multiple
-                      accept="image/*"
-                      onChange={(e) => e.target.files && handleFileUpload(e.target.files)}
-                      className="hidden"
-                    />
-                    {isUploading && (
-                      <div className="text-xs font-mono text-blue-400 flex items-center gap-1.5 mt-2">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>{uploadProgress}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Slides inventory */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                      <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Reel Sequence</h2>
-                      <span className="text-[10px] font-mono text-slate-500">{announcementSettings.images.length} images configured</span>
-                    </div>
-
-                    {announcementSettings.images.length === 0 ? (
-                      <div className="p-10 border border-dashed border-white/10 rounded-2xl text-center text-slate-400 bg-white/2">
-                        No images uploaded. Add some using the upload zone above.
-                      </div>
-                    ) : (
-                      <div className="space-y-2.5">
-                        {announcementSettings.images.map((slide, index) => (
-                          <div
-                            key={slide.filename}
-                            className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl px-4 py-3 flex items-center justify-between gap-4 transition-all hover:bg-white/[0.08]"
-                          >
-                            <div className="flex items-center gap-3.5 overflow-hidden">
-                              {/* Position Index */}
-                              <span className="font-mono text-xs font-bold text-slate-300 bg-slate-950/40 px-2.5 py-1 rounded-lg border border-white/5">
-                                {String(index + 1).padStart(2, "0")}
-                              </span>
-
-                              {/* Image Thumbnail */}
-                              <img
-                                src={`/api/announcements/images/${encodeURIComponent(slide.filename)}`}
-                                alt="Announcement Slide"
-                                referrerPolicy="no-referrer"
-                                className="w-14 h-10 object-cover rounded-lg border border-white/10 flex-shrink-0 shadow-sm"
-                              />
-
-                              {/* Details */}
-                              <div className="overflow-hidden">
-                                <span className="text-xs font-semibold text-white block truncate">
-                                  {slide.filename.substring(slide.filename.indexOf("_") + 1)}
-                                </span>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Duration:</span>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    max="120"
-                                    value={slide.duration}
-                                    onChange={(e) => updateSlideDuration(index, Number(e.target.value))}
-                                    className="w-14 bg-slate-950/40 border border-white/10 text-[10px] font-mono rounded-lg px-1.5 py-0.5 text-center text-slate-200 focus:outline-none focus:border-blue-500"
-                                  />
-                                  <span className="text-[10px] text-slate-400 font-mono">sec</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Reorder and Delete controls */}
-                            <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <button
-                                onClick={() => moveSlide(index, "up")}
-                                disabled={index === 0}
-                                className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-lg disabled:opacity-20 transition-all"
-                              >
-                                <ArrowUp className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => moveSlide(index, "down")}
-                                disabled={index === announcementSettings.images.length - 1}
-                                className="p-1.5 bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 rounded-lg disabled:opacity-20 transition-all"
-                              >
-                                <ArrowDown className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => deleteSlide(slide.filename)}
-                                className="p-1.5 bg-white/5 hover:bg-rose-500/10 border border-white/10 text-slate-400 hover:text-rose-400 rounded-lg transition-all ml-1"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-
-              {/* Media Stream Loops Manager */}
-              <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-5 shadow-xl">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <Sliders className="w-4 h-4 text-emerald-500" />
-                  <div>
-                    <h2 className="text-xs font-bold text-white uppercase tracking-wider">Media &amp; YouTube Loop Streams</h2>
-                    <p className="text-[10px] text-slate-400 mt-1">
-                      Route video loops or YouTube streams into MediaMTX. Run them manually or assign as backups for Failover smart routing.
-                    </p>
-                  </div>
-                </div>
-                <div className="pt-4 border-t border-slate-200 dark:border-white/5 space-y-4">
-                  <MediaStreamManager
-                    configs={mediaStreams}
-                    localFiles={localMediaFiles}
-                    onRefresh={fetchMediaStreams}
-                    hlsBaseUrl={hlsBaseUrl}
-                    onPreview={(url) => setPreviewStream(url)}
-                  />
-                </div>
-              </div>
-            </motion.div>
+          {/* ====== OUTPUTS TAB ====== */}
+          {activeTab === "outputs" && (
+            <OutputsTab
+              pathNames={pathNames}
+              pathConfigs={pathConfigs}
+              routerSettings={routerSettings}
+              activePaths={activePaths}
+              fetchStreamsData={fetchStreamsData}
+              onUpdateRouterSettings={onUpdateRouterSettings}
+              onUpdatePathConfig={onUpdatePathConfig}
+              onAddPath={onAddPath}
+              onDeletePath={onDeletePath}
+            />
           )}
 
           {/* ====== SETTINGS TAB ====== */}
           {activeTab === "settings" && (
-            <motion.div
-              key="settings"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-              className="space-y-6"
-            >
-              {/* Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-5">
-                <div>
-                  <h1 className="text-xl font-bold text-slate-800 dark:text-white uppercase tracking-wider">System Settings</h1>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Configure stream autopilot rules, MediaMTX parameters, public router, and security credentials</p>
-                </div>
-              </div>
-
-              {/* 1. Control Panel Settings */}
-              <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                <div
-                  onClick={() => setExpandedSettings(prev => ({ ...prev, panel: !prev.panel }))}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Monitor className="w-4 h-4 text-blue-500" />
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Control Panel Settings</h2>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Configure public linkage and external playback URLs</p>
-                    </div>
-                  </div>
-                  {expandedSettings.panel ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  )}
-                </div>
-
-                {expandedSettings.panel && (
-                  <div className="p-5 border-t border-slate-200 dark:border-white/5 bg-slate-50/10 dark:bg-slate-950/20 space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-700 dark:text-slate-300">MediaMTX Public HLS Base URL</label>
-                      <p className="text-[11px] text-slate-500">Normally your LAN IP address where HLS is reachable. Do not use local container alias.</p>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          value={hlsBaseUrl}
-                          onChange={(e) => setHlsBaseUrl(e.target.value)}
-                          placeholder="http://192.168.1.100:8888"
-                          className="flex-1 bg-slate-100 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                        />
-                        <button
-                          onClick={handleSaveUiSettings}
-                          className="py-2 px-4 bg-slate-200 dark:bg-white/5 hover:bg-slate-300 dark:hover:bg-white/10 border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-white text-xs font-semibold rounded-xl transition-all"
-                        >
-                          SAVE LINKING
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. MediaMTX Live configuration */}
-              <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                <div
-                  onClick={() => setExpandedSettings(prev => ({ ...prev, mediamtx: !prev.mediamtx }))}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Settings className="w-4 h-4 text-purple-500" />
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">MediaMTX API Config</h2>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Tweak RTSP, RTMP, HLS, WebRTC, and system log levels</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        fetchGlobalConfig();
-                      }}
-                      className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                    </button>
-                    {expandedSettings.mediamtx ? (
-                      <ChevronUp className="w-4 h-4 text-slate-400" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400" />
-                    )}
-                  </div>
-                </div>
-
-                {expandedSettings.mediamtx && (
-                  <div className="p-5 border-t border-slate-200 dark:border-white/5 bg-slate-50/10 dark:bg-slate-950/20 space-y-6">
-                    {configError && (
-                      <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs px-4 py-3 rounded-lg flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                        <span>{configError}</span>
-                      </div>
-                    )}
-
-                    {isLoadingConfig ? (
-                      <div className="text-center py-12 text-slate-500 flex flex-col items-center justify-center gap-2">
-                        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-                        <span className="text-xs font-mono text-slate-400">PULLING LIVE PARAMETERS...</span>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleSaveGlobalConfig} className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                          {/* Logging */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">Server Log Level</span>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">Level</label>
-                              <select
-                                value={globalConfig.logLevel || "info"}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, logLevel: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-300 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500"
-                              >
-                                <option value="debug" className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">debug</option>
-                                <option value="info" className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">info</option>
-                                <option value="warn" className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">warn</option>
-                                <option value="error" className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">error</option>
-                              </select>
-                            </div>
-                          </div>
-
-                          {/* RTSP */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">RTSP Config</span>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">Listen Address</label>
-                              <input
-                                type="text"
-                                value={globalConfig.rtspAddress || ""}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, rtspAddress: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          {/* RTMP */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">RTMP Config</span>
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Enable RTMP</label>
-                              <input
-                                type="checkbox"
-                                checked={!!globalConfig.rtmpEnable}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, rtmpEnable: e.target.checked }))}
-                                className="w-4 h-4 accent-blue-600 rounded border-slate-300 dark:border-white/25 bg-slate-50 dark:bg-white/5 cursor-pointer"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">Listen Address</label>
-                              <input
-                                type="text"
-                                value={globalConfig.rtmpAddress || ""}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, rtmpAddress: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          {/* HLS */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">HLS Config</span>
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Enable HLS</label>
-                              <input
-                                type="checkbox"
-                                checked={!!globalConfig.hlsEnable}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, hlsEnable: e.target.checked }))}
-                                className="w-4 h-4 accent-blue-600 rounded border-slate-300 dark:border-white/25 bg-slate-50 dark:bg-white/5 cursor-pointer"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">Listen Address</label>
-                              <input
-                                type="text"
-                                value={globalConfig.hlsAddress || ""}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, hlsAddress: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          {/* WebRTC */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">WebRTC Config</span>
-                            <div className="flex items-center justify-between">
-                              <label className="text-[10px] text-slate-600 dark:text-slate-400 font-bold">Enable WebRTC</label>
-                              <input
-                                type="checkbox"
-                                checked={!!globalConfig.webrtcEnable}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, webrtcEnable: e.target.checked }))}
-                                className="w-4 h-4 accent-blue-600 rounded border-slate-300 dark:border-white/25 bg-slate-50 dark:bg-white/5 cursor-pointer"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">Listen Address</label>
-                              <input
-                                type="text"
-                                value={globalConfig.webrtcAddress || ""}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, webrtcAddress: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Control API */}
-                          <div className="bg-slate-100/50 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl p-4 space-y-3">
-                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 tracking-wider block uppercase">Control API</span>
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] text-slate-400 block">API Listen Address</label>
-                              <input
-                                type="text"
-                                value={globalConfig.apiAddress || ""}
-                                onChange={(e) => setGlobalConfig((prev) => ({ ...prev, apiAddress: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-1.5 px-2.5 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {saveStatus && (
-                          <div className={`text-xs px-4 py-3 rounded-2xl flex items-center gap-2 border backdrop-blur-md ${
-                            saveStatus.type === "success"
-                              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
-                              : "bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400"
-                          }`}>
-                            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                            <span>{saveStatus.msg}</span>
-                          </div>
-                        )}
-
-                        <div className="pt-4 border-t border-slate-200 dark:border-white/10 flex items-center gap-2.5 justify-end">
-                          <button
-                            type="button"
-                            onClick={fetchGlobalConfig}
-                            className="py-2 px-4 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-xs font-bold rounded-xl transition-all"
-                          >
-                            RELOAD DETAILS
-                          </button>
-                          <button
-                            type="submit"
-                            disabled={isSavingConfig}
-                            className="py-2 px-5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-500/15 transition-all"
-                          >
-                            {isSavingConfig ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings className="w-3.5 h-3.5" />}
-                            <span>APPLY CHANGES</span>
-                          </button>
-                        </div>
-                      </form>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Stream Autopilot settings */}
-              <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                <div
-                  onClick={() => setExpandedSettings(prev => ({ ...prev, autopilot: !prev.autopilot }))}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Cable className="w-4 h-4 text-blue-500" />
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">STREAM-AUTOPILOT Settings</h2>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Define automated primary failover & target hotswapping configurations</p>
-                    </div>
-                  </div>
-                  {expandedSettings.autopilot ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  )}
-                </div>
-
-                {expandedSettings.autopilot && (
-                  <div className="p-5 border-t border-slate-200 dark:border-white/5 bg-slate-50/10 dark:bg-slate-955/20 space-y-4">
-                    <form onSubmit={handleSaveRouterSettings} className="space-y-4">
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Automatically route an output stream path to a custom fallback (such as your Photo Loop or Media Loop) or an active primary publisher stream.
-                        When your primary live source goes online (e.g. sharing from OBS), Stream Autopilot will automatically hot-swap the destination stream path to it.
-                        When the live stream stops, Stream Autopilot gracefully routes back to the configured fallback sequence loop.
-                      </p>
-
-                      <div className="flex items-center gap-2 pt-1 pb-2">
-                        <input
-                          type="checkbox"
-                          id="router-enabled"
-                          checked={routerSettings.enabled}
-                          onChange={(e) => setRouterSettings((prev) => ({ ...prev, enabled: e.target.checked }))}
-                          className="w-4 h-4 accent-blue-600 rounded border-slate-300 dark:border-white/25 bg-slate-50 dark:bg-white/5 cursor-pointer"
-                        />
-                        <label htmlFor="router-enabled" className="text-xs font-semibold text-slate-700 dark:text-slate-300 select-none cursor-pointer">
-                          Enable Stream Autopilot Routing
-                        </label>
-                      </div>
-
-                      {/* Available stream options for routing */}
-                      {(() => {
-                        const allRoutingSources = Array.from(new Set([
-                          "live",
-                          "announcements",
-                          "main",
-                          ...pathNames,
-                          ...mediaStreams.map((m) => m.name)
-                        ])).filter(Boolean);
-
-                        return (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Primary Source Path</label>
-                              <select
-                                value={routerSettings.primaryPath}
-                                onChange={(e) => setRouterSettings((prev) => ({ ...prev, primaryPath: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                              >
-                                {allRoutingSources.map((src) => (
-                                  <option key={src} value={src} className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">/{src}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Fallback Path</label>
-                              <select
-                                value={routerSettings.fallbackPath}
-                                onChange={(e) => setRouterSettings((prev) => ({ ...prev, fallbackPath: e.target.value }))}
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                              >
-                                {allRoutingSources.map((src) => (
-                                  <option key={src} value={src} className="bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200">/{src}</option>
-                                ))}
-                              </select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Destination Path (Output)</label>
-                              <input
-                                type="text"
-                                value={routerSettings.destinationPath}
-                                onChange={(e) => setRouterSettings((prev) => ({ ...prev, destinationPath: e.target.value }))}
-                                placeholder="main"
-                                required
-                                className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500 font-mono"
-                              />
-                            </div>
-                          </div>
-                        );
-                      })()}
-
-                      <div className="pt-2 flex justify-end">
-                        <button
-                          type="submit"
-                          className="py-2 px-5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-blue-500/15 transition-all"
-                        >
-                          <Settings className="w-3.5 h-3.5" />
-                          <span>APPLY AUTOPILOT</span>
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-
-              {/* 4. Administrator Security: Change Password */}
-              <div className="bg-white/5 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-2xl overflow-hidden shadow-xl transition-all">
-                <div
-                  onClick={() => setExpandedSettings(prev => ({ ...prev, security: !prev.security }))}
-                  className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-100/50 dark:hover:bg-white/[0.02] select-none transition-colors"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Key className="w-4 h-4 text-emerald-500" />
-                    <div>
-                      <h2 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest">Control Studio Security</h2>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Modify administrator access credential keys</p>
-                    </div>
-                  </div>
-                  {expandedSettings.security ? (
-                    <ChevronUp className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  )}
-                </div>
-
-                {expandedSettings.security && (
-                  <div className="p-5 border-t border-slate-200 dark:border-white/5 bg-slate-50/10 dark:bg-slate-955/20 space-y-4">
-                    <form onSubmit={handleChangePassword} className="space-y-4">
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Modify the administrator credential keys. Avoid standard passwords. Make sure to keep the new key saved.
-                      </p>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Current Admin Password</label>
-                          <input
-                            type="password"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            placeholder="••••••••••••"
-                            required
-                            className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-
-                        <div className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">New Admin Password</label>
-                          <input
-                            type="password"
-                            value={newPassword}
-                            onChange={(e) => setNewPassword(e.target.value)}
-                            placeholder="••••••••••••"
-                            required
-                            className="w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200 dark:border-white/10 rounded-xl text-slate-800 dark:text-slate-200 text-xs py-2 px-3 focus:outline-none focus:border-blue-500"
-                          />
-                        </div>
-                      </div>
-
-                      {passwordStatus && (
-                        <div className={`text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 border ${
-                          passwordStatus.type === "success"
-                            ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
-                            : "bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400"
-                        }`}>
-                          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-                          <span>{passwordStatus.msg}</span>
-                        </div>
-                      )}
-
-                      <div className="pt-2 flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={isSavingPassword}
-                          className="py-2 px-5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-emerald-500/15 transition-all disabled:opacity-50"
-                        >
-                          {isSavingPassword ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span>SAVING...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Lock className="w-3.5 h-3.5" />
-                              <span>CHANGE PASSWORD</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-              </div>
-            </motion.div>
+            <SettingsTab
+              hlsBaseUrl={hlsBaseUrl}
+              setHlsBaseUrl={setHlsBaseUrl}
+              globalConfig={globalConfig}
+              setGlobalConfig={setGlobalConfig}
+              isLoadingConfig={isLoadingConfig}
+              configError={configError}
+              saveStatus={saveStatus}
+              fetchGlobalConfig={fetchGlobalConfig}
+              handleSaveGlobalConfig={handleSaveGlobalConfig}
+              handleSaveUiSettings={handleSaveUiSettings}
+              currentPassword={currentPassword}
+              setCurrentPassword={setCurrentPassword}
+              newPassword={newPassword}
+              setNewPassword={setNewPassword}
+              handleChangePassword={handleChangePassword}
+              passwordChangeStatus={passwordStatus}
+              isChangingPassword={isSavingPassword}
+            />
           )}
 
-        </AnimatePresence>
+          </AnimatePresence>
       </main>
     </div>
 

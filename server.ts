@@ -19,11 +19,14 @@ import { initMetrics } from "./server/metrics.js";
 async function startServer() {
   const app = express();
 
+  // Trust proxy for secure cookie transmission behind cloud run/nginx
+  app.set("trust proxy", 1);
+
   // Parse JSON and form bodies
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
-  // Session configuration
+  // Session configuration - configured for preview iframe compatibility
   app.use(
     session({
       secret: SESSION_SECRET,
@@ -31,7 +34,8 @@ async function startServer() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        sameSite: "lax",
+        sameSite: "none",
+        secure: true, // Required when SameSite=None
         maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
       },
     })
